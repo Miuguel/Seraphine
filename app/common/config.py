@@ -14,6 +14,7 @@ from .qfluentwidgets import (qconfig, QConfig, ConfigItem, FolderValidator, Bool
 class Language(Enum):
     CHINESE_SIMPLIFIED = QLocale(QLocale.Chinese, QLocale.China)
     ENGLISH = QLocale(QLocale.English)
+    PORTUGUESE = QLocale(QLocale.Portuguese)
     AUTO = QLocale()
 
 

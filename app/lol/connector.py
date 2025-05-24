@@ -1371,22 +1371,30 @@ class JsonManager:
     def getNameMapByQueueId(self, queueId):
         if queueId == 0:
             return {
-                "name": "Custom" if cfg.language.value == Language.ENGLISH else "自定义"
+                "name": "Custom" if cfg.language.value == Language.ENGLISH else 
+                       "Personalizado" if cfg.language.value == Language.PORTUGUESE else 
+                       "自定义"
             }
 
         data = self.queues[queueId]
         mapId = data["mapId"]
         name = data["name"]
 
-        if cfg.language.value == Language.ENGLISH:
-            with open("app/resource/i18n/gamemodes.json", encoding="utf-8") as f:
-                translate = json.loads(f.read())
-
-                if name in translate:
-                    name = translate[name]
+        with open("app/resource/i18n/gamemodes.json", encoding="utf-8") as f:
+            translate = json.loads(f.read())
+            
+            if name in translate:
+                if isinstance(translate[name], dict):
+                    if cfg.language.value == Language.ENGLISH:
+                        name = translate[name]["en"]
+                    elif cfg.language.value == Language.PORTUGUESE:
+                        name = translate[name]["pt"]
+                else:
+                    # Handle old format for backward compatibility
+                    if cfg.language.value == Language.ENGLISH:
+                        name = translate[name]
 
         map = self.getMapNameById(mapId)
-
         return {"map": map, "name": name}
 
     def getMapIconByMapId(self, mapId, win):

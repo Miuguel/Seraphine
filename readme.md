@@ -22,7 +22,7 @@ Clique [aqui](https://github.com/Miuguel/Seraphine/releases/latest) para acessar
 ### Ou construa localmente
 Baixe o código-fonte do projeto como um arquivo `zip` e extraia para uma pasta ou use `git`:
 ```shell
-  git clone https://github.com/Zzaphkiel/Seraphine.git
+  git clone https://github.com/Miuguel/Seraphine.git
   cd Seraphine
 ```
 Crie e ative um novo ambiente conda:

@@ -8,10 +8,10 @@
 
 <div align="center">
 
-  [![Licença](https://img.shields.io/github/license/Zzaphkiel/Seraphine?style=flat&label=License)](https://github.com/Zzaphkiel/Seraphine/blob/main/LICENSE)
-  [![Forks](https://img.shields.io/github/forks/Zzaphkiel/Seraphine?style=flat&label=Forks)](https://github.com/Zzaphkiel/Seraphine/forks)
-  [![Stars](https://img.shields.io/github/stars/Zzaphkiel/Seraphine?style=flat&label=Stars)](https://github.com/Zzaphkiel/Seraphine/stargazers)
-  [![Downloads](https://img.shields.io/github/downloads/Zzaphkiel/Seraphine/total?style=flat&label=Downloads)](https://github.com/Zzaphkiel/Seraphine/releases)
+  [![Licença](https://img.shields.io/github/license/Miuguel/Seraphine?style=flat&label=License)](https://github.com/Miuguel/Seraphine/blob/main/LICENSE)
+  [![Forks](https://img.shields.io/github/forks/Miuguel/Seraphine?style=flat&label=Forks)](https://github.com/Miuguel/Seraphine/forks)
+  [![Stars](https://img.shields.io/github/stars/Miuguel/Seraphine?style=flat&label=Stars)](https://github.com/Miuguel/Seraphine/stargazers)
+  [![Downloads](https://img.shields.io/github/downloads/Miuguel/Seraphine/total?style=flat&label=Downloads)](https://github.com/Miuguel/Seraphine/releases)
 
 </div>
 
@@ -22,7 +22,7 @@ Clique [aqui](https://github.com/Miuguel/Seraphine/releases/latest) para acessar
 ### Ou construa localmente
 Baixe o código-fonte do projeto como um arquivo `zip` e extraia para uma pasta ou use `git`:
 ```shell
-  git clone https://github.com/Zzaphkiel/Seraphine.git
+  git clone https://github.com/Miuguel/Seraphine.git
   cd Seraphine
 ```
 Crie e ative um novo ambiente conda:
@@ -91,7 +91,7 @@ O Seraphine depende dos dados fornecidos pela API do cliente do LoL. Se houver p
 Suspeitamos que o cliente do jogo é sensível a algumas requisições HTTP.
 
 ## Como ajudar a melhorar o Seraphine 😘
-Se encontrar bugs ou comportamentos inesperados, relate um [issue](https://github.com/Zzaphkiel/Seraphine/issues). Para novas sugestões, abra um issue ou envie um [PR](https://github.com/Zzaphkiel/Seraphine/pulls)!
+Se encontrar bugs ou comportamentos inesperados, relate um [issue](https://github.com/Miuguel/Seraphine/issues). Para novas sugestões, abra um issue ou envie um [PR](https://github.com/Miuguel/Seraphine/pulls)!
 
 ## Empacotando um executável 📂
 Instale `Pyinstaller` e garanta que o comando `7z` está disponível:
@@ -107,6 +107,6 @@ Execute o script `make.ps1` para criar `Seraphine.7z`:
 Seraphine não é endossado pela Riot Games e não reflete as opiniões da Riot Games. Riot Games e suas propriedades são marcas registradas da Riot Games, Inc.
 
 ## Licença ⚖️
-- O Seraphine é licenciado sob a [GPLv3](https://github.com/Zzaphkiel/Seraphine/blob/main/LICENSE) para uso não comercial.
+- O Seraphine é licenciado sob a [GPLv3](https://github.com/Miuguel/Seraphine/blob/main/LICENSE) para uso não comercial.
 - O uso comercial do código e arquivos binários é proibido.
 

@@ -158,6 +158,7 @@ class CareerInterface(SeraphineInterface):
             self.tr('All'),
             self.tr('Normal'),
             self.tr("A.R.A.M."),
+            self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
             self.tr("Ranked Flex")
         ])
@@ -536,8 +537,10 @@ class CareerInterface(SeraphineInterface):
         elif index == 2:
             targetId = 450
         elif index == 3:
-            targetId = 420
+            targetId = 2400
         elif index == 4:
+            targetId = 420
+        elif index == 5:
             targetId = 440
         else:
             targetId = 0

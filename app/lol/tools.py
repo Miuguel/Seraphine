@@ -1451,7 +1451,7 @@ async def showOpggBuild(data, selection: ChampionSelection):
         else:
             mode = ""
     else:
-        if selection.queueId == 450:
+        if selection.queueId in (450, 2400):  # ARAM / ARAM: Mayhem
             mode = 'aram'
         elif selection.queueId in (1700, 1710):
             mode = 'arena'

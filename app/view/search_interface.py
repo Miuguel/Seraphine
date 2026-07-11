@@ -1155,6 +1155,7 @@ class SearchInterface(SeraphineInterface):
             self.tr('All'),
             self.tr('Normal'),
             self.tr("A.R.A.M."),
+            self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
             self.tr("Ranked Flex")
         ])
@@ -1425,7 +1426,7 @@ class SearchInterface(SeraphineInterface):
         tabs = self.gamesView.gamesTab
         tabs.clearTabs()
 
-        ids = (-1, 430, 450, 420, 440)
+        ids = (-1, 430, 450, 2400, 420, 440)
         tabs.queueId = ids[index]
 
         self.gamesView.setLoadingPageEnable(True)

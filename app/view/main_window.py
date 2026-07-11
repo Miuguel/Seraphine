@@ -1052,11 +1052,12 @@ class MainWindow(FluentWindow):
         for call in connector.callStack:
             logger.error(call, "Crash")
 
-        logger.error(str(self.searchInterface), "Crash")
-        logger.error(str(self.gameInfoInterface), "Crash")
-        logger.error(str(self.careerInterface), "Crash")
-        logger.error(str(self.auxiliaryFuncInterface), "Crash")
-        logger.error(str(self.settingInterface), "Crash")
+        # interfaces may not exist yet if the crash happened during __init__
+        for name in ('searchInterface', 'gameInfoInterface', 'careerInterface',
+                     'auxiliaryFuncInterface', 'settingInterface'):
+            interface = getattr(self, name, None)
+            if interface is not None:
+                logger.error(str(interface), "Crash")
 
         content = f"Seraphine ver.{BETA or VERSION}\n{'-'*5}\n{content}"
 

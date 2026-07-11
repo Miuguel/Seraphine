@@ -212,7 +212,7 @@ class SettingInterface(SeraphineInterface):
             Icon.LANGUAGE,
             self.tr('Language'),
             self.tr('Set your preferred language for Seraphine'),
-            texts=['简体中文', 'English',
+            texts=['简体中文', 'English', 'Português',
                    self.tr('Use system setting')],
             parent=self.personalizationGroup)
 

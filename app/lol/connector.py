@@ -1275,7 +1275,8 @@ class JsonManager:
 
         self.champions = {item: {"skins": {}} for item in self.champs.values()}
         self.queues = {
-            item["id"]: {"mapId": item["mapId"], "name": item["name"]}
+            item["id"]: {"mapId": item["mapId"], "name": item["name"],
+                         "gameMode": item.get("gameMode")}
             for item in queueData
         }
 
@@ -1396,6 +1397,10 @@ class JsonManager:
 
         map = self.getMapNameById(mapId)
         return {"map": map, "name": name}
+
+    def getGameModeByQueueId(self, queueId):
+        data = self.queues.get(queueId)
+        return data["gameMode"] if data else None
 
     def getMapIconByMapId(self, mapId, win):
         result = "victory" if win else "defeat"

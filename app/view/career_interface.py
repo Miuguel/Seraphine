@@ -533,7 +533,7 @@ class CareerInterface(SeraphineInterface):
                 item.widget().deleteLater()
 
         if index == 1:
-            targetId = 430
+            targetId = (400, 430)  # Normal Draft / Blind (legacy)
         elif index == 2:
             targetId = 450
         elif index == 3:

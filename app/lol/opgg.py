@@ -353,44 +353,28 @@ class OpggDataParser:
             'pickRate': data['skills'][0]['pick_rate']
         }
 
-        boots = []
-        for i in data['boots'][:3]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            boots.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+        async def parseItemGroup(items, limit):
+            res = []
+            for i in (items or [])[:limit]:
+                icons = [await connector.getItemIcon(id) for id in i['ids']]
+                res.append({
+                    "icons": icons,
+                    "play": i['play'],
+                    "win": i['win'],
+                    'pickRate': i['pick_rate'],
+                    "averatePlace": i['total_place'] / i['play'],
+                    "firstRate": i['first_place'] / i['play']
+                })
 
-        startItems = []
-        for i in data['starter_items'][:3]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            startItems.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+            return res
 
-        coreItems = []
-        for i in data['core_items'][:5]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            coreItems.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+        boots = await parseItemGroup(data.get('boots'), 3)
+        startItems = await parseItemGroup(data.get('starter_items'), 3)
+        prismItems = await parseItemGroup(data.get('prism_items'), 3)
+        coreItems = await parseItemGroup(data.get('core_items'), 5)
 
         lastItems = []
-        for i in data['last_items'][:16]:
+        for i in (data.get('last_items') or [])[:16]:
             lastItems.append(await connector.getItemIcon(i['ids'][0]))
 
         augments = []
@@ -437,6 +421,7 @@ class OpggDataParser:
             "items": {
                 "boots": boots,
                 "startItems": startItems,
+                "prismItems": prismItems,
                 "coreItems": coreItems,
                 "lastItems": lastItems,
             },

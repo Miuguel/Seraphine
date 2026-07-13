@@ -617,10 +617,20 @@ class ChampionItemWidget(BuildWidgetBase):
                 layout.addWidget(label)
 
     def updateWidget(self, data):
-        self.__updateLayout(self.startItems, data['startItems'])
-        self.__updateLayout(self.boots, data['boots'])
-        self.__updateLayout(self.coreItems, data['coreItems'])
-        self.__updateLayout(self.lastItems, data['lastItems'])
+        startItems = data.get('startItems') or []
+        boots = data.get('boots') or []
+
+        # 斗魂竞技场没有出门装, 该列用于展示棱彩装备
+        if not startItems:
+            startItems = data.get('prismItems') or []
+
+        self.__updateLayout(self.startItems, startItems)
+        self.__updateLayout(self.boots, boots)
+        self.__updateLayout(self.coreItems, data.get('coreItems') or [])
+        self.__updateLayout(self.lastItems, data.get('lastItems') or [])
+
+        # 某一列为空时隐藏中间的分隔线
+        self.vLine.setVisible(bool(startItems) and bool(boots))
 
         self.setVisible(True)
 

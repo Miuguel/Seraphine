@@ -174,6 +174,8 @@ class OpggWindow(OpggWindowBase):
         self.modeComboBox.addItem(
             self.tr("Aram"), icon="app/resource/images/ha-victory.png", userData='aram')
         self.modeComboBox.addItem(
+            self.tr("ARAM: Mayhem"), icon="app/resource/images/ha-victory.png", userData='aram')
+        self.modeComboBox.addItem(
             self.tr("Arena"), icon="app/resource/images/arena-victory.png", userData='arena')
         self.modeComboBox.addItem(
             self.tr("Urf"), icon="app/resource/images/other-victory.png", userData='urf')

@@ -189,9 +189,10 @@ class OpggDataParser:
         name = connector.manager.getChampionNameById(championId)
 
         if position != 'none':
+            stats = {}
             for p in summary['positions']:
                 if p['name'] == position:
-                    stats: dict = p['stats']
+                    stats: dict = p['stats'] or {}
                     break
 
             winRate = stats.get('win_rate')
@@ -199,12 +200,13 @@ class OpggDataParser:
             banRate = stats.get('ban_rate')
             kda = stats.get('kda')
 
-            tierData: dict = stats['tier_data']
+            tierData: dict = stats.get('tier_data') or {}
             tier = tierData.get("tier")
             rank = tierData.get("rank")
 
         else:
-            stats = summary['average_stats']
+            # 数据量少的英雄 average_stats 可能为 None
+            stats = summary['average_stats'] or {}
             winRate = stats.get('win_rate')
             pickRate = stats.get('pick_rate')
             banRate = stats.get('ban_rate')

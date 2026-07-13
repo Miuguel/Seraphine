@@ -640,6 +640,32 @@ class LolClientConnector(QObject):
         return res["games"]
 
     @retry()
+    async def getTftGamesByPuuid(self, puuid, count=20):
+        """
+        Retrieves TFT match history by PUUID.
+
+        Args:
+            puuid (str): The PUUID of the summoner.
+            count (int, optional): How many games to retrieve. Defaults to 20.
+
+        Returns:
+            list: A list of TFT games ({'json': {...}, 'metadata': {...}}).
+
+        Raises:
+            SummonerGamesNotFound: If the match history is not found.
+        """
+        params = {"begin": 0, "count": count}
+        res = await self.__get(
+            f"/lol-match-history/v1/products/tft/{puuid}/matches", params
+        )
+        res = await res.json()
+
+        if "games" not in res:
+            raise SummonerGamesNotFound()
+
+        return res["games"]
+
+    @retry()
     async def getGameDetailByGameId(self, gameId):
         res = await self.__get(f"/lol-match-history/v1/games/{gameId}")
 
@@ -1273,6 +1299,10 @@ class JsonManager:
 
         self.champs = {item["id"]: item["name"] for item in champions}
 
+        # alias 是英雄的内部英文名 (如 MonkeyKing), TFT 的 character_id 使用它
+        self.champAliases = {item["alias"].lower(): item["id"]
+                             for item in champions if "alias" in item}
+
         self.champions = {item: {"skins": {}} for item in self.champs.values()}
         self.queues = {
             item["id"]: {"mapId": item["mapId"], "name": item["name"],
@@ -1401,6 +1431,9 @@ class JsonManager:
     def getGameModeByQueueId(self, queueId):
         data = self.queues.get(queueId)
         return data["gameMode"] if data else None
+
+    def getChampionIdByAlias(self, alias):
+        return self.champAliases.get(alias.lower(), -1)
 
     def getMapIconByMapId(self, mapId, win):
         result = "victory" if win else "defeat"

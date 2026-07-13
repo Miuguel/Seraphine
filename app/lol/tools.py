@@ -58,6 +58,7 @@ class ToolsTranslator(QObject):
 
         self.rankedSolo = self.tr('Ranked Solo')
         self.rankedFlex = self.tr("Ranked Flex")
+        self.rankedTft = self.tr("Ranked TFT")
 
         self.unranked = self.tr("Unranked")
         self.unknown = self.tr("Unknown")
@@ -82,10 +83,11 @@ def translateTier(orig: str, short=False) -> str:
 
     index = 1 if short else 0
 
-    if cfg.language.value == Language.ENGLISH:
-        return orig.capitalize()
-    else:
+    # 只有中文才需要翻译段位名
+    if cfg.language.value == Language.CHINESE_SIMPLIFIED:
         return maps[orig.capitalize()][index]
+    else:
+        return orig.capitalize()
 
 
 def timeStampToStr(stamp):
@@ -716,80 +718,48 @@ def parseRankInfoFromSGP(info):
 
 
 def parseDetailRankInfo(rankInfo):
-    soloRankInfo = rankInfo['queueMap']['RANKED_SOLO_5x5']
-    soloTier = translateTier(soloRankInfo['tier'])
-    soloDivision = soloRankInfo['division']
-    if soloTier == '--' or soloDivision == 'NA':
-        soloDivision = ""
-
-    soloHighestTier = translateTier(soloRankInfo['highestTier'])
-    soloHighestDivision = soloRankInfo['highestDivision']
-    if soloHighestTier == '--' or soloHighestDivision == 'NA':
-        soloHighestDivision = ""
-
-    solxPreviousSeasonEndTier = translateTier(
-        soloRankInfo['previousSeasonEndTier'])
-    soloPreviousSeasonDivision = soloRankInfo[
-        'previousSeasonEndDivision']
-    if solxPreviousSeasonEndTier == '--' or soloPreviousSeasonDivision == 'NA':
-        soloPreviousSeasonDivision = ""
-
-    soloWins = soloRankInfo['wins']
-    soloLosses = soloRankInfo['losses']
-    soloTotal = soloWins + soloLosses
-    soloWinRate = soloWins * 100 // soloTotal if soloTotal != 0 else 0
-    soloLp = soloRankInfo['leaguePoints']
-
-    flexRankInfo = rankInfo['queueMap']['RANKED_FLEX_SR']
-    flexTier = translateTier(flexRankInfo['tier'])
-    flexDivision = flexRankInfo['division']
-    if flexTier == '--' or flexDivision == 'NA':
-        flexDivision = ""
-
-    flexHighestTier = translateTier(flexRankInfo['highestTier'])
-    flexHighestDivision = flexRankInfo['highestDivision']
-    if flexHighestTier == '--' or flexHighestDivision == 'NA':
-        flexHighestDivision = ""
-
-    flexPreviousSeasonEndTier = translateTier(
-        flexRankInfo['previousSeasonEndTier'])
-    flexPreviousSeasonEndDivision = flexRankInfo[
-        'previousSeasonEndDivision']
-
-    if flexPreviousSeasonEndTier == '--' or flexPreviousSeasonEndDivision == 'NA':
-        flexPreviousSeasonEndDivision = ""
-
-    flexWins = flexRankInfo['wins']
-    flexLosses = flexRankInfo['losses']
-    flexTotal = flexWins + flexLosses
-    flexWinRate = flexWins * 100 // flexTotal if flexTotal != 0 else 0
-    flexLp = flexRankInfo['leaguePoints']
-
     pt = ToolsTranslator()
 
+    def parseQueue(queueType, label):
+        info = rankInfo['queueMap'][queueType]
+
+        tier = translateTier(info['tier'])
+        division = info['division']
+        if tier == '--' or division == 'NA':
+            division = ""
+
+        highestTier = translateTier(info['highestTier'])
+        highestDivision = info['highestDivision']
+        if highestTier == '--' or highestDivision == 'NA':
+            highestDivision = ""
+
+        previousSeasonEndTier = translateTier(info['previousSeasonEndTier'])
+        previousSeasonEndDivision = info['previousSeasonEndDivision']
+        if previousSeasonEndTier == '--' or previousSeasonEndDivision == 'NA':
+            previousSeasonEndDivision = ""
+
+        wins = info['wins']
+        losses = info['losses']
+        total = wins + losses
+        winRate = wins * 100 // total if total != 0 else 0
+        lp = info['leaguePoints']
+
+        return [
+            label,
+            str(total),
+            str(winRate) + ' %' if total != 0 else '--',
+            str(wins),
+            str(losses),
+            f'{tier} {division}',
+            str(lp),
+            f'{highestTier} {highestDivision}',
+            f'{previousSeasonEndTier} {previousSeasonEndDivision}',
+        ]
+
     return [
-        [
-            pt.rankedSolo,
-            str(soloTotal),
-            str(soloWinRate) + ' %' if soloTotal != 0 else '--',
-            str(soloWins),
-            str(soloLosses),
-            f'{soloTier} {soloDivision}',
-            str(soloLp),
-            f'{soloHighestTier} {soloHighestDivision}',
-            f'{solxPreviousSeasonEndTier} {soloPreviousSeasonDivision}',
-        ],
-        [
-            pt.rankedFlex,
-            str(flexTotal),
-            str(flexWinRate) + ' %' if flexTotal != 0 else '--',
-            str(flexWins),
-            str(flexLosses),
-            f'{flexTier} {flexDivision}',
-            str(flexLp),
-            f'{flexHighestTier} {flexHighestDivision}',
-            f'{flexPreviousSeasonEndTier} {flexPreviousSeasonEndDivision}',
-        ],
+        parseQueue('RANKED_SOLO_5x5', pt.rankedSolo),
+        parseQueue('RANKED_FLEX_SR', pt.rankedFlex),
+        parseQueue('RANKED_TFT', pt.rankedTft),
     ]
 
 
@@ -824,6 +794,90 @@ def parseGames(games, targetId=0):
                     losses += 1
 
     return hitGames, kills, deaths, assists, wins, losses
+
+
+async def parseTftGames(games, puuid):
+    """
+    解析云顶之弈战绩数据
+
+    @param games: 由 `connector.getTftGamesByPuuid` 获取到的数据
+    @param puuid: 目标召唤师的 puuid
+    @return: hitGames, wins (前四), losses, averagePlacement
+    """
+
+    hitGames = []
+    wins, losses, placementSum = 0, 0, 0
+
+    for game in games:
+        data = game['json']
+        participants = data.get('participants') or []
+
+        me = next(
+            (p for p in participants if p.get('puuid') == puuid), None)
+        if me is None:
+            continue
+
+        queueId = data.get('queueId') or data.get('queue_id') or 0
+
+        try:
+            modeName = connector.manager.getNameMapByQueueId(queueId)['name']
+        except:
+            modeName = "TFT"
+
+        units = []
+        for unit in me.get('units') or []:
+            characterId = unit.get('character_id') or ''
+
+            # character_id 形如 TFT17_Talon, 取英雄 alias 部分
+            alias = characterId.split('_', 1)[-1]
+            championId = connector.manager.getChampionIdByAlias(alias)
+            icon = await connector.getChampionIcon(championId)
+
+            units.append({
+                'icon': icon,
+                'tier': unit.get('tier', 0),
+                'rarity': unit.get('rarity', 0),
+            })
+
+        units.sort(key=lambda x: (x['rarity'], x['tier']), reverse=True)
+
+        placement = me.get('placement', 0)
+        win = placement != 0 and placement <= 4
+
+        if placement != 0:
+            placementSum += placement
+            if win:
+                wins += 1
+            else:
+                losses += 1
+
+        # game_datetime 是字符串, gameCreation 是整数
+        try:
+            stamp = float(data.get('game_datetime')
+                          or data.get('gameCreation') or 0)
+        except (TypeError, ValueError):
+            stamp = 0
+
+        try:
+            length = float(data.get('game_length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+
+        hitGames.append({
+            'gameId': data.get('gameId') or data.get('game_id'),
+            'placement': placement,
+            'win': win,
+            'modeName': modeName,
+            'setName': f"Set {data.get('tft_set_number')}" if data.get('tft_set_number') else "",
+            'time': timeStampToStr(stamp),
+            'duration': secsToStr(length),
+            'level': me.get('level', 0),
+            'units': units,
+        })
+
+    averagePlacement = (placementSum / (wins + losses)) if wins + losses else 0
+
+    return hitGames, wins, losses, averagePlacement
 
 
 async def parseAllyGameInfo(session, currentSummonerId, queueID, useSGP=False):

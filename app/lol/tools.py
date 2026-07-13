@@ -17,6 +17,18 @@ SERVERS_NAME = {
     "HN10": "黑色玫瑰", "HN1": "艾欧尼亚", "BGP2": "峡谷之巅"
 }
 
+# 斗魂竞技场 -- Arena (gameMode CHERRY): 1700/1710 legacy 2v2x8, 1750 current 3x6
+ARENA_QUEUE_IDS = (1700, 1710, 1750)
+
+# Game modes whose matches carry no SR-style stats to display
+# (Arena, Teamfight Tactics and Swarm PvE)
+STATS_EXCLUDED_GAME_MODES = ('CHERRY', 'TFT', 'STRAWBERRY')
+
+
+def isStatsEnabledForQueue(queueId):
+    gameMode = connector.manager.getGameModeByQueueId(queueId)
+    return gameMode not in STATS_EXCLUDED_GAME_MODES
+
 SERVERS_SUBSET = {
     "NJ100": ["祖安", "皮尔特沃夫", "巨神峰", "教育网", "男爵领域", "均衡教派", "影流", "守望之海"],
     "GZ100": ["卡拉曼达", "暗影岛", "征服之海", "诺克萨斯", "战争学院", "雷瑟守备"],
@@ -363,7 +375,7 @@ async def parseGameDetailData(puuid, game):
             if summoner['participantId'] == participantId:
                 stats = summoner['stats']
 
-                if queueId != 1700:
+                if queueId not in ARENA_QUEUE_IDS:
                     subteamPlacement = None
                     tid = summoner['teamId']
                 else:
@@ -374,7 +386,7 @@ async def parseGameDetailData(puuid, game):
                     remake = stats['gameEndedInEarlySurrender']
                     win = stats['win']
 
-                    if queueId == 1700:
+                    if queueId in ARENA_QUEUE_IDS:
                         cherryResult = subteamPlacement
 
                 championId = summoner['championId']
@@ -423,7 +435,7 @@ async def parseGameDetailData(puuid, game):
                     else:
                         rank = rank['queueMap']
 
-                        if queueId == 1700 and 'CHERRY' in rank:
+                        if queueId in ARENA_QUEUE_IDS and 'CHERRY' in rank:
                             rankInfo = rank["CHERRY"]
                             lp = rankInfo['ratedRating']
                         else:
@@ -512,7 +524,7 @@ def getTeammates(game, targetPuuid):
 
     for player in game['participants']:
         if player['participantId'] == targetParticipantId:
-            if game['queueId'] != 1700:
+            if game['queueId'] not in ARENA_QUEUE_IDS:
                 tid = player['teamId']
             else:  # Arena mode
                 tid = player['stats']['subteamPlacement']
@@ -532,7 +544,7 @@ def getTeammates(game, targetPuuid):
 
     for player in game['participants']:
 
-        if game['queueId'] != 1700:
+        if game['queueId'] not in ARENA_QUEUE_IDS:
             cmp = player['teamId']
         else:
             cmp = player['stats']['subteamPlacement']
@@ -794,8 +806,11 @@ def parseGames(games, targetId=0):
     kills, deaths, assists, wins, losses = 0, 0, 0, 0, 0
     hitGames = []
 
+    if targetId and not isinstance(targetId, tuple):
+        targetId = (targetId,)
+
     for game in games:
-        if not targetId or game['queueId'] == targetId:
+        if not targetId or game['queueId'] in targetId:
             hitGames.append(game)
 
             if not game['remake']:
@@ -856,7 +871,7 @@ async def parseGameInfoByGameflowSession(session, currentSummonerId, side, useSG
     data = session['gameData']
     queueId = data['queue']['id']
 
-    if queueId in (1700, 1090, 1100, 1110, 1130, 1160):  # 斗魂 云顶匹配 (排位)
+    if not isStatsEnabledForQueue(queueId):  # 斗魂 云顶 (Arena / TFT / Swarm)
         return None
 
     if side == 'enemy':
@@ -1196,7 +1211,7 @@ def getTeammatesFromSGPGame(game, puuid):
 
     for player in json['participants']:
         if player['puuid'] == puuid:
-            if queueId != 1700:
+            if queueId not in ARENA_QUEUE_IDS:
                 tid = player['teamId']
             else:  # 斗魂竞技场
                 tid = player['subteamPlacement']
@@ -1215,7 +1230,7 @@ def getTeammatesFromSGPGame(game, puuid):
     }
 
     for player in json['participants']:
-        if queueId != 1700:
+        if queueId not in ARENA_QUEUE_IDS:
             cmp = player['teamId']
         else:
             cmp = player['subteamPlacement']
@@ -1446,18 +1461,18 @@ async def showOpggBuild(data, selection: ChampionSelection):
     if selection.queueId == None:
         if data.get('benchEnabled'):
             mode = "aram"
-        elif len(data['myTeam']) == 2:
+        elif len(data['myTeam']) in (2, 3):  # Arena: 2v2 legacy / 3x6 current
             mode = 'arena'
         else:
             mode = ""
     else:
         if selection.queueId in (450, 2400):  # ARAM / ARAM: Mayhem
             mode = 'aram'
-        elif selection.queueId in (1700, 1710):
+        elif selection.queueId in ARENA_QUEUE_IDS:
             mode = 'arena'
         elif selection.queueId == 1300:
             mode = 'nexus_blitz'
-        elif selection.queueId in (900, 1900):
+        elif selection.queueId in (900, 901, 1900, 740, 741):  # ARURF / URF / URF Clash
             mode = 'urf'
         else:
             mode = 'ranked'

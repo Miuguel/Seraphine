@@ -1390,16 +1390,22 @@ class JsonManager:
 
     def getMapNameById(self, mapId):
         maps = {
-            -1: ("特殊地图", "Special map"),
-            11: ("召唤师峡谷", "Summoner's Rift"),
-            12: ("嚎哭深渊", "Howling Abyss"),
-            21: ("极限闪击", "Nexus Blitz"),
-            30: ("斗魂竞技场", "Arena"),
-            453: ("经典召唤师峡谷", "League Classic"),  # patch 26.15 League Classic map
+            -1: ("特殊地图", "Special map", "Mapa especial"),
+            11: ("召唤师峡谷", "Summoner's Rift", "Fenda do Invocador"),
+            12: ("嚎哭深渊", "Howling Abyss", "Abismo Uivante"),
+            21: ("极限闪击", "Nexus Blitz", "Nexus Blitz"),
+            30: ("斗魂竞技场", "Arena", "Arena"),
+            453: ("经典召唤师峡谷", "League Classic", "Fenda do Invocador Clássica"),
         }
 
         key = mapId if mapId in maps else -1
-        index = 1 if cfg.language.value == Language.ENGLISH else 0
+
+        if cfg.language.value == Language.ENGLISH:
+            index = 1
+        elif cfg.language.value == Language.PORTUGUESE:
+            index = 2
+        else:
+            index = 0
 
         return maps[key][index]
 

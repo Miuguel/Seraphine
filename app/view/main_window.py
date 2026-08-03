@@ -45,7 +45,7 @@ from app.lol.tools import (parseAllyGameInfo, parseGameInfoByGameflowSession,
                            getAllyOrderByGameRole, getTeamColor, autoBan, autoPick,
                            autoComplete, autoSwap, autoTrade, ChampionSelection,
                            SERVERS_NAME, SERVERS_SUBSET, showOpggBuild, autoShow,
-                           autoSetSummonerSpell)
+                           autoSetSummonerSpell, isStatsEnabledForQueue)
 from app.lol.aram import AramBuff
 from app.lol.champions import ChampionAlias
 from app.lol.opgg import opgg
@@ -922,7 +922,7 @@ class MainWindow(FluentWindow):
         currentSummonerId = self.currentSummoner['summonerId']
 
         queueId = session['gameData']['queue']['id']
-        if queueId in (1700, 1090, 1100, 1110, 1130, 1160):  # 斗魂 云顶匹配 (排位)
+        if not isStatsEnabledForQueue(queueId):  # 斗魂 云顶 (Arena / TFT / Swarm)
             return
 
         # 如果是进游戏后开的软件，需要先把友方信息更新上去

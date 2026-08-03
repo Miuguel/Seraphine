@@ -30,7 +30,8 @@ from app.components.animation_frame import ColorAnimationFrame, CardWidget
 from app.components.color_label import ColorLabel, DeathsLabel
 from app.lol.connector import connector
 from app.lol.exceptions import SummonerGamesNotFound, SummonerNotFound
-from app.lol.tools import parseGameData, parseGameDetailData, parseGamesDataConcurrently
+from app.lol.tools import (parseGameData, parseGameDetailData,
+                           parseGamesDataConcurrently, ARENA_QUEUE_IDS)
 from ..components.seraphine_interface import SeraphineInterface
 
 
@@ -136,6 +137,14 @@ class GamesTab(QFrame):
 
             self.queueIdMap[-1].append(index)
 
+    def getIndicesByQueueId(self, queueId):
+        # 支持多个 queueId 合并显示 (如 400/430 都是匹配模式)
+        if isinstance(queueId, tuple):
+            return sorted(
+                i for qid in queueId for i in self.queueIdMap.get(qid, []))
+
+        return self.queueIdMap.get(queueId, [])
+
     @asyncSlot()
     async def __onPrevButtonClicked(self):
         self.currentPageNum -= 1
@@ -175,7 +184,7 @@ class GamesTab(QFrame):
         self.prevButton.setEnabled(prevEnable)
 
         nextEnable = len(
-            self.queueIdMap.get(self.queueId, [])) > self.currentPageNum * 10
+            self.getIndicesByQueueId(self.queueId)) > self.currentPageNum * 10
         self.nextButton.setEnabled(nextEnable)
 
     def prepareNextPage(self):
@@ -187,7 +196,7 @@ class GamesTab(QFrame):
         '''
 
         # 游戏数据在 self.games 数组中对应的下标
-        indices = self.queueIdMap[self.queueId]
+        indices = self.getIndicesByQueueId(self.queueId)
 
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -371,7 +380,7 @@ class GameDetailView(QFrame):
 
             return
 
-        isCherry = game["queueId"] == 1700
+        isCherry = game["queueId"] in ARENA_QUEUE_IDS
         self.titleBar.updateTitleBar(game)
 
         team1 = game["teams"][100]
@@ -383,38 +392,33 @@ class GameDetailView(QFrame):
         self.teamView2.updateTeam(team2, isCherry, self.tr("2nd"))
         self.teamView2.updateSummoners(team2["summoners"])
 
-        self.extraTeamView1.setVisible(isCherry)
-        self.extraTeamView2.setVisible(isCherry)
-        self.extraTeamView3.setVisible(isCherry)
-        self.extraTeamView4.setVisible(isCherry)
-        self.extraTeamView5.setVisible(isCherry)
-        self.extraTeamView6.setVisible(isCherry)
+        extraTeamViews = [
+            self.extraTeamView1,
+            self.extraTeamView2,
+            self.extraTeamView3,
+            self.extraTeamView4,
+            self.extraTeamView5,
+            self.extraTeamView6,
+        ]
 
-        if isCherry:
-            team3 = game["teams"][300]
-            team4 = game["teams"][400]
-            team5 = game["teams"][500]
-            team6 = game["teams"][600]
-            team7 = game["teams"][700]
-            team8 = game["teams"][800]
+        placements = [
+            self.tr("3rd"),
+            self.tr("4th"),
+            self.tr("5th"),
+            self.tr("6th"),
+            self.tr("7th"),
+            self.tr("8th"),
+        ]
 
-            self.extraTeamView1.updateTeam(team3, isCherry, self.tr("3rd"))
-            self.extraTeamView1.updateSummoners(team3["summoners"])
+        # Arena 3x6 fills 6 subteams, legacy 2v2 fills 8 -- hide empty slots
+        for i, view in enumerate(extraTeamViews):
+            team = game["teams"][(i + 3) * 100]
+            visible = isCherry and len(team["summoners"]) > 0
+            view.setVisible(visible)
 
-            self.extraTeamView2.updateTeam(team4, isCherry, self.tr("4th"))
-            self.extraTeamView2.updateSummoners(team4["summoners"])
-
-            self.extraTeamView3.updateTeam(team5, isCherry, self.tr("5th"))
-            self.extraTeamView3.updateSummoners(team5["summoners"])
-
-            self.extraTeamView4.updateTeam(team6, isCherry, self.tr("6th"))
-            self.extraTeamView4.updateSummoners(team6["summoners"])
-
-            self.extraTeamView5.updateTeam(team7, isCherry, self.tr("7th"))
-            self.extraTeamView5.updateSummoners(team7["summoners"])
-
-            self.extraTeamView6.updateTeam(team8, isCherry, self.tr("8th"))
-            self.extraTeamView6.updateSummoners(team8["summoners"])
+            if visible:
+                view.updateTeam(team, isCherry, placements[i])
+                view.updateSummoners(team["summoners"])
 
 
 class TeamView(QFrame, ColorChangeable):
@@ -923,7 +927,7 @@ class GameTitleBar(QFrame, ColorChangeable):
         self.titleBarLayout.addSpacing(10)
 
     def updateTitleBar(self, game):
-        isCherry = game["queueId"] == 1700
+        isCherry = game["queueId"] in ARENA_QUEUE_IDS
 
         self.remake = game['remake']
         self.win = game['win']
@@ -1155,6 +1159,7 @@ class SearchInterface(SeraphineInterface):
             self.tr('All'),
             self.tr('Normal'),
             self.tr("A.R.A.M."),
+            self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
             self.tr("Ranked Flex")
         ])
@@ -1425,15 +1430,19 @@ class SearchInterface(SeraphineInterface):
         tabs = self.gamesView.gamesTab
         tabs.clearTabs()
 
-        ids = (-1, 430, 450, 420, 440)
+        ids = (-1, (400, 430), 450, 2400, 420, 440)
         tabs.queueId = ids[index]
 
         self.gamesView.setLoadingPageEnable(True)
 
-        while len(self.gamesView.gamesTab.queueIdMap.get(tabs.queueId, [])) < 10:
+        while len(self.gamesView.gamesTab.getIndicesByQueueId(tabs.queueId)) < 10:
+            # 所有对局已加载完毕, 不足 10 场也直接显示 (如新模式场次较少)
+            if self.gameLoadingTask is None or self.gameLoadingTask.done():
+                break
+
             await asyncio.sleep(.2)
 
-        enable = tabs.queueIdMap.get(tabs.queueId) is not None
+        enable = len(tabs.getIndicesByQueueId(tabs.queueId)) > 0
         tabs.prevButton.setVisible(enable)
         tabs.nextButton.setVisible(enable)
         tabs.nextButton.setVisible(enable)

@@ -190,7 +190,8 @@ class OpggDataParser:
 
         if position != 'none':
             stats = {}
-            for p in summary['positions']:
+            # 数据量少的英雄 positions 可能为 None
+            for p in summary['positions'] or []:
                 if p['name'] == position:
                     stats: dict = p['stats'] or {}
                     break
@@ -227,13 +228,18 @@ class OpggDataParser:
                 'pickRate': s['pick_rate']
             })
 
-        skills = {
-            "masteries": data['skill_masteries'][0]['ids'],
-            "order": data['skills'][0]['order'],
-            'play': data['skills'][0]['play'],
-            'win': data['skills'][0]['win'],
-            'pickRate': data['skills'][0]['pick_rate']
-        }
+        # Low-sample-size modes/positions (e.g. League Classic) may not have
+        # enough games recorded to have any skill-order data at all.
+        if data['skill_masteries'] and data['skills']:
+            skills = {
+                "masteries": data['skill_masteries'][0]['ids'],
+                "order": data['skills'][0]['order'],
+                'play': data['skills'][0]['play'],
+                'win': data['skills'][0]['win'],
+                'pickRate': data['skills'][0]['pick_rate']
+            }
+        else:
+            skills = None
 
         boots = []
         for i in data['boots'][:3]:

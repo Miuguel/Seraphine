@@ -161,11 +161,14 @@ class ChampionTitleBar(ColorAnimationFrame):
             self.banRateTextLabel.setText(self.tr("Pick Rate"))
             self.banRateLabel.setText(f"{data['pickRate']*100:.2f}%")
         else:
+            # Low-sample-size champions/positions (e.g. League Classic) may
+            # have no recorded stats at all -- fall back to 0 instead of
+            # crashing on None.
             self.winRateTextLabel.setText(self.tr("Win Rate"))
-            self.winRateLabel.setText(f"{data['winRate']*100:.2f}%")
+            self.winRateLabel.setText(f"{(data['winRate'] or 0)*100:.2f}%")
 
             self.pickRateTextLabel.setText(self.tr("Pick Rate"))
-            self.pickRateLabel.setText(f"{data['pickRate']*100:.2f}%")
+            self.pickRateLabel.setText(f"{(data['pickRate'] or 0)*100:.2f}%")
 
             if banRate := data['banRate']:
                 self.banRateTextLabel.setText(self.tr("Ban Rate"))
@@ -367,7 +370,15 @@ class SummonerSpellsWidget(BuildWidgetBase):
             return
 
         self.spell1.updateSpell(data[0])
-        self.spell2.updateSpell(data[1])
+
+        # Low-sample-size modes (e.g. League Classic) may only have one
+        # summoner spell combo with enough games recorded -- hide the
+        # second slot instead of crashing on a missing entry.
+        hasSecond = len(data) > 1
+        if hasSecond:
+            self.spell2.updateSpell(data[1])
+        self.spell2.setVisible(hasSecond)
+        self.vLine.setVisible(hasSecond)
 
         self.setVisible(True)
 
@@ -453,6 +464,10 @@ class ChampionSkillsWidget(BuildWidgetBase):
                 widget.deleteLater()
 
     def updateWidget(self, data):
+        if not data:
+            self.setVisible(False)
+            return
+
         self.__clearLayout(self.mainSkillLayout)
         self.__clearLayout(self.skillOrderLayout)
 

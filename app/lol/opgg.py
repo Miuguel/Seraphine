@@ -1,3 +1,5 @@
+import os
+
 import aiohttp
 from async_lru import alru_cache
 
@@ -6,10 +8,15 @@ from app.common.config import cfg
 
 TAG = "opgg"
 
+CLASSIC_RUNE_ICON_FOLDER = "app/resource/game/classic rune icons"
+
 
 class Opgg:
     def __init__(self):
         self.session = None
+        # Separate session (no base_url) for fetching assets off OP.GG's CDN
+        # host, which differs from the API host self.session is pinned to.
+        self.assetSession = None
         self.proxy = None
 
         if cfg.get(cfg.enableOpggProxy):
@@ -17,14 +24,37 @@ class Opgg:
 
     async def start(self):
         self.session = aiohttp.ClientSession("https://lol-api-champion.op.gg")
+        self.assetSession = aiohttp.ClientSession()
 
     async def close(self):
         if self.session:
             await self.session.close()
+        if self.assetSession:
+            await self.assetSession.close()
 
     async def __get(self, url, params=None):
         res = await self.session.get(url, params=params, ssl=False, proxy=self.proxy)
         return await res.json()
+
+    async def getClassicRuneIcon(self, url, sourceToken):
+        """
+        League Classic's old-style rune icons (Mark/Seal/Glyph/Quintessence)
+        are hosted on OP.GG's own CDN, not exposed by the LCU -- cache them
+        locally the same way champion/item/rune icons are cached elsewhere.
+        """
+        if not os.path.exists(CLASSIC_RUNE_ICON_FOLDER):
+            os.makedirs(CLASSIC_RUNE_ICON_FOLDER)
+
+        path = f"{CLASSIC_RUNE_ICON_FOLDER}/{sourceToken}.png"
+
+        if not os.path.exists(path):
+            res = await self.assetSession.get(url, ssl=False, proxy=self.proxy)
+            data = await res.read()
+
+            with open(path, 'wb') as f:
+                f.write(data)
+
+        return path
 
     @alru_cache(maxsize=512)
     async def __fetchTierList(self, region, mode, tier):
@@ -307,6 +337,23 @@ class OpggDataParser:
         } for perk in data['runes']
         ]
 
+        # League Classic (and its ARAM: Mayhem Classic-ish variant) use the
+        # old pre-2017 Mark/Seal/Glyph/Quintessence rune system instead of
+        # the modern rune trees -- OP.GG exposes this separately as
+        # "classic_runes" since it has no relation to the modern "runes"
+        # field (which is always empty for these modes).
+        classicRunes = [{
+            'runes': [{
+                'icon': await opgg.getClassicRuneIcon(rune['icon_url'], rune['source_token']),
+                'name': rune['name'],
+                'tooltip': rune['tooltip'],
+                'count': rune['count'],
+            } for rune in page['runes']],
+            'play': page['play'],
+            'win': page['win'],
+            'pickRate': page['pick_rate'],
+        } for page in data.get('classic_runes') or []]
+
         return {
             "summary": {
                 'name': name,
@@ -333,6 +380,7 @@ class OpggDataParser:
                 "weakAgainst": weakAgainst,
             },
             "perks": perks,
+            "classicRunes": classicRunes,
         }
 
     @staticmethod

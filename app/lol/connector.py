@@ -1399,10 +1399,10 @@ class JsonManager:
         }
 
         key = mapId if mapId in maps else -1
-        # Map names stay in English for both English and Portuguese --
-        # only the Chinese default falls back to index 0.
-        index = 1 if cfg.language.value in (
-            Language.ENGLISH, Language.PORTUGUESE) else 0
+        # Map names are in English for every language except explicit
+        # Chinese -- this also covers Language.AUTO, which most users
+        # (including non-Chinese system locales) leave selected by default.
+        index = 0 if cfg.language.value == Language.CHINESE_SIMPLIFIED else 1
 
         return maps[key][index]
 

@@ -354,6 +354,23 @@ class OpggDataParser:
             'pickRate': page['pick_rate'],
         } for page in data.get('classic_runes') or []]
 
+        # ARAM: Mayhem Classic-ish has no runes at all (see classicRunes
+        # above), but -- like Mayhem and Arena -- does have an augment pick,
+        # exposed the same way Arena's "augment_group" is. Most modes don't
+        # have this field at all, so keep augments as None (not []) for
+        # them -- ChampionAugmentsWidget treats None as "hide", but an empty
+        # list would render as a blank card.
+        augmentGroup = data.get('augment_group')
+        hasAugmentData = augmentGroup and any(g['augments'] for g in augmentGroup)
+        augments = None if not hasAugmentData else [[{
+            "id": (augId := aug['id']),
+            "icon": await connector.getAugmentIcon(augId),
+            "name": connector.manager.getAugmentsName(augId),
+            "win": aug['win'],
+            'play': aug['play'],
+            'pickRate': aug['pick_rate']
+        } for aug in group['augments']] for group in augmentGroup]
+
         return {
             "summary": {
                 'name': name,
@@ -381,6 +398,7 @@ class OpggDataParser:
             },
             "perks": perks,
             "classicRunes": classicRunes,
+            "augments": augments,
         }
 
     @staticmethod

@@ -260,7 +260,19 @@ class MainWindow(FluentWindow):
         self.mainWindowHide.connect(self.__onWindowHide)
 
     def __initWindow(self):
-        self.setMinimumSize(1134, 826)
+        desktop = QApplication.desktop().availableGeometry()
+        w, h = desktop.width(), desktop.height()
+
+        # Don't let the window's floor be taller/wider than the actual screen
+        # (e.g. 1366x768 laptops have ~728px of usable height): the old fixed
+        # 1134x826 minimum didn't fit and clipped the bottom of the window
+        # off-screen, with no way to shrink it back down.
+        self.setMinimumSize(min(1134, w), min(826, h))
+
+        self.windowSize = QSize(min(self.windowSize.width(), w),
+                                 min(self.windowSize.height(), h))
+        self.resize(self.windowSize)
+
         self.setWindowIcon(QIcon("app/resource/images/logo.png"))
         self.setWindowTitle("Seraphine")
 
@@ -274,8 +286,6 @@ class MainWindow(FluentWindow):
         self.splashScreen.setIconSize(QSize(106, 106))
         self.splashScreen.raise_()
 
-        desktop = QApplication.desktop().availableGeometry()
-        w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
         self.show()

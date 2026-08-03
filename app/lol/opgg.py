@@ -46,8 +46,8 @@ class Opgg:
 
     @alru_cache(maxsize=512)
     async def getChampionBuild(self, region, mode, championId, position, tier):
-        positions = await self.getChampionPositions(region, championId, tier)
-        if position not in positions and mode == 'ranked':
+        positions = await self.getChampionPositions(region, championId, tier, mode)
+        if position not in positions and positions and mode in ('ranked', 'classic'):
             position = positions[0]
 
         raw = await self.__fetchChampionBuild(region, mode, championId, position, tier)
@@ -80,13 +80,13 @@ class Opgg:
         }
 
     @alru_cache(maxsize=512)
-    async def getChampionPositions(self, region, championId, tier):
+    async def getChampionPositions(self, region, championId, tier, mode="ranked"):
         # This call is quite fast due to caching
-        data = await self.__fetchTierList(region, "ranked", tier)
+        data = await self.__fetchTierList(region, mode, tier)
 
         for item in data['data']:
             if item['id'] == championId:
-                return [p['name'] for p in item['positions']]
+                return [p['name'] for p in item['positions'] or []]
 
         return []
 

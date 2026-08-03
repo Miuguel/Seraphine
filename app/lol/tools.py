@@ -1540,9 +1540,10 @@ async def showOpggBuild(data, selection: ChampionSelection):
             mode = 'nexus_blitz'
         elif selection.queueId in (900, 901, 1900, 740, 741):  # ARURF / URF / URF Clash
             mode = 'urf'
-        elif selection.queueId in CLASSIC_QUEUE_IDS or selection.queueId in ARAM_MAYHEM_CLASSIC_QUEUE_IDS:
-            # No OP.GG endpoint for these modes yet -- keep the build panel hidden.
-            mode = ''
+        elif selection.queueId in CLASSIC_QUEUE_IDS:
+            mode = 'classic'
+        elif selection.queueId in ARAM_MAYHEM_CLASSIC_QUEUE_IDS:
+            mode = 'aram_mayhem_classic'
         else:
             mode = 'ranked'
 

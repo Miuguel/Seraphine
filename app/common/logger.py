@@ -4,7 +4,7 @@ import traceback
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-from app.common.config import cfg
+from app.common.config import cfg, LOCAL_PATH
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):
@@ -51,8 +51,9 @@ class Logger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(cfg.get(cfg.logLevel))
 
-        # Why not use a relative path directly here?
-        log_directory = os.path.join(os.getcwd(), 'log')
+        # Uses LOCAL_PATH (%AppData%/Seraphine) instead of a cwd-relative path,
+        # since a onefile build's cwd is a temp folder wiped after each run
+        log_directory = os.path.join(LOCAL_PATH, 'log')
         if not os.path.exists(log_directory):
             os.makedirs(log_directory)
 
@@ -73,7 +74,7 @@ class Logger:
         today = datetime.now().strftime('%Y-%m-%d')
         log_file = f"{self.name}_{today}_%s.log" % logging.getLevelName(
             cfg.get(cfg.logLevel))
-        log_path = os.path.join('log', log_file)
+        log_path = os.path.join(LOCAL_PATH, 'log', log_file)
         return log_path
 
     def log(self, level, message, tag=None):

@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
 
 from app.common.icons import Icon
 from app.common.config import (cfg, YEAR, AUTHOR, VERSION, FEEDBACK_URL, GITHUB_URL, isWin11,
-                               BETA)
+                               BETA, LOCAL_PATH)
 from app.common.style_sheet import StyleSheet
 from app.components.seraphine_interface import SeraphineInterface
 from app.components.setting_cards import (LineEditSettingCard, GameTabColorSettingCard,
@@ -330,7 +330,7 @@ class SettingInterface(SeraphineInterface):
             lambda: QDesktopServices.openUrl(QUrl(FEEDBACK_URL)))
         self.deleteResourceCard.clicked.connect(self.__showFlyout)
         self.viewLogCard.clicked.connect(
-            lambda: os.system(f'explorer {os.getcwd()}\\log')
+            lambda: os.system(f'explorer {LOCAL_PATH}\\log')
         )
 
     def __onLolFolderCardClicked(self):

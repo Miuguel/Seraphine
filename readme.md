@@ -96,8 +96,9 @@ Se encontrar bugs ou comportamentos inesperados, relate um [issue](https://githu
 ## Empacotando um executável 
 Instale `Pyinstaller` e garanta que o comando `7z` está disponível:
 ```shell
-  pip install pyinstaller==5.13
+  pip install pyinstaller
 ```
+> Nota: a versão `5.13` fixada anteriormente depende do `pkg_resources`, removido nas versões recentes do `setuptools` (usadas em ambientes Python 3.11+). Use a versão mais recente do PyInstaller nesses ambientes.
 Execute o script `make.ps1` para criar `Seraphine.7z`:
 ``` shell
   .\make -dest .

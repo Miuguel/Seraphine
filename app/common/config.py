@@ -41,7 +41,7 @@ def isWin11():
 
 class QueueFilterValidator(ConfigValidator):
     def validate(self, value):
-        keys = ["420", "430", "440", "450", "480", "2400"]
+        keys = ["420", "430", "440", "450", "480", "2400", "4310", "2450"]
 
         for key in keys:
             if key not in value:
@@ -50,7 +50,7 @@ class QueueFilterValidator(ConfigValidator):
         return True
 
     def correct(self, value):
-        keys = ["420", "430", "440", "450", "480", "2400"]
+        keys = ["420", "430", "440", "450", "480", "2400", "4310", "2450"]
         new = deepcopy(value)
 
         for key in keys:
@@ -234,6 +234,8 @@ class Config(QConfig):
         "450": [],
         "480": [],
         "2400": [],
+        "4310": [],
+        "2450": [],
     }, QueueFilterValidator())
 
 

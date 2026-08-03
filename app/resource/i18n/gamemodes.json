@@ -163,5 +163,21 @@
     "斗魂竞技场": {
         "en": "Arena",
         "pt": "Arena"
+    },
+    "5v5 Clássico": {
+        "en": "League Classic",
+        "pt": "5v5 Clássico"
+    },
+    "ARAM: Desordem Raiz": {
+        "en": "ARAM: Mayhem Classic-ish",
+        "pt": "ARAM: Desordem Raiz"
+    },
+    "Rift Clássico": {
+        "en": "League Classic (Custom)",
+        "pt": "Rift Clássico"
+    },
+    "Jade": {
+        "en": "League Classic (Co-op vs. AI)",
+        "pt": "Jade"
     }
 }

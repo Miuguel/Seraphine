@@ -1305,7 +1305,10 @@ class JsonManager:
 
         self.champions = {item: {"skins": {}} for item in self.champs.values()}
         self.queues = {
-            item["id"]: {"mapId": item["mapId"], "name": item["name"],
+            # Some queues (e.g. League Classic's 4310) ship with an empty "name" and
+            # only carry a human-readable label in "description".
+            item["id"]: {"mapId": item["mapId"],
+                         "name": item["name"] or item.get("description", ""),
                          "gameMode": item.get("gameMode")}
             for item in queueData
         }
@@ -1392,6 +1395,7 @@ class JsonManager:
             12: ("嚎哭深渊", "Howling Abyss"),
             21: ("极限闪击", "Nexus Blitz"),
             30: ("斗魂竞技场", "Arena"),
+            453: ("经典召唤师峡谷", "League Classic"),  # patch 26.15 League Classic map
         }
 
         key = mapId if mapId in maps else -1

@@ -164,7 +164,9 @@ class CareerInterface(SeraphineInterface):
             self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
             self.tr("Ranked Flex"),
-            self.tr("Teamfight Tactics")
+            self.tr("Teamfight Tactics"),
+            self.tr("League Classic"),
+            self.tr("ARAM: Mayhem Classic-ish"),
         ])
         self.filterComboBox.setCurrentIndex(0)
         self.winsLabel.setToolTip(
@@ -554,6 +556,10 @@ class CareerInterface(SeraphineInterface):
             targetId = 420
         elif index == 5:
             targetId = 440
+        elif index == 7:
+            targetId = 4310  # League Classic
+        elif index == 8:
+            targetId = 2450  # ARAM: Mayhem Classic-ish
         else:
             targetId = 0
 

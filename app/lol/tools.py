@@ -20,6 +20,18 @@ SERVERS_NAME = {
 # 斗魂竞技场 -- Arena (gameMode CHERRY): 1700/1710 legacy 2v2x8, 1750 current 3x6
 ARENA_QUEUE_IDS = (1700, 1710, 1750)
 
+# League Classic (patch 26.15, released 2026-07-29, gameMode JADE, mapId 453):
+# matchmade Normal / Co-op vs AI / Custom Blind / Custom Draft on the old Season
+# 3-era Summoner's Rift. Standard SR-shaped match stats, no special parsing needed
+# -- only queue recognition for filters/history/OPGG below.
+CLASSIC_QUEUE_IDS = (4310, 4320, 3260, 3262)
+
+# ARAM: Mayhem Classic-ish / "ARAM: Desordem Raiz" (patch 26.15, released 2026-07-29,
+# gameMode KIWI_JADE, mapId 12): ARAM variant using the Classic 60-champion roster,
+# classic items and themed augments. Distinct from the existing "ARAM: Mayhem" queue
+# (2400). Standard ARAM-shaped match stats. Matchmade + custom.
+ARAM_MAYHEM_CLASSIC_QUEUE_IDS = (2450, 3280)
+
 # Game modes whose matches carry no SR-style stats to display
 # (Arena, Teamfight Tactics and Swarm PvE)
 STATS_EXCLUDED_GAME_MODES = ('CHERRY', 'TFT', 'STRAWBERRY')
@@ -1528,6 +1540,9 @@ async def showOpggBuild(data, selection: ChampionSelection):
             mode = 'nexus_blitz'
         elif selection.queueId in (900, 901, 1900, 740, 741):  # ARURF / URF / URF Clash
             mode = 'urf'
+        elif selection.queueId in CLASSIC_QUEUE_IDS or selection.queueId in ARAM_MAYHEM_CLASSIC_QUEUE_IDS:
+            # No OP.GG endpoint for these modes yet -- keep the build panel hidden.
+            mode = ''
         else:
             mode = 'ranked'
 

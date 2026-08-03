@@ -1161,7 +1161,9 @@ class SearchInterface(SeraphineInterface):
             self.tr("A.R.A.M."),
             self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
-            self.tr("Ranked Flex")
+            self.tr("Ranked Flex"),
+            self.tr("League Classic"),
+            self.tr("ARAM: Mayhem Classic-ish"),
         ])
         self.filterComboBox.setCurrentIndex(0)
 
@@ -1430,7 +1432,7 @@ class SearchInterface(SeraphineInterface):
         tabs = self.gamesView.gamesTab
         tabs.clearTabs()
 
-        ids = (-1, (400, 430), 450, 2400, 420, 440)
+        ids = (-1, (400, 430), 450, 2400, 420, 440, 4310, 2450)
         tabs.queueId = ids[index]
 
         self.gamesView.setLoadingPageEnable(True)

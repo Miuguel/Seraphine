@@ -4,15 +4,15 @@ import traceback
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 
-from app.common.config import cfg
+from app.common.config import cfg, LOCAL_PATH
 
 
 class CustomRotatingFileHandler(RotatingFileHandler):
     """
-    使日志分片名称不再放到后缀中
+    Prevents the log fragment name from being placed in the suffix.
 
-    RotatingFileHandler: aaa.log.1
-    CustomRotatingFileHandler: aaa_1.log
+    RotatingFileHandler: aaa.log.1  
+    CustomRotatingFileHandler: aaa_1.log  
     """
 
     def doRollover(self):
@@ -51,8 +51,9 @@ class Logger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(cfg.get(cfg.logLevel))
 
-        # 这里为什么不直接用相对路径捏？
-        log_directory = os.path.join(os.getcwd(), 'log')
+        # Uses LOCAL_PATH (%AppData%/Seraphine) instead of a cwd-relative path,
+        # since a onefile build's cwd is a temp folder wiped after each run
+        log_directory = os.path.join(LOCAL_PATH, 'log')
         if not os.path.exists(log_directory):
             os.makedirs(log_directory)
 
@@ -73,7 +74,7 @@ class Logger:
         today = datetime.now().strftime('%Y-%m-%d')
         log_file = f"{self.name}_{today}_%s.log" % logging.getLevelName(
             cfg.get(cfg.logLevel))
-        log_path = os.path.join('log', log_file)
+        log_path = os.path.join(LOCAL_PATH, 'log', log_file)
         return log_path
 
     def log(self, level, message, tag=None):
@@ -100,7 +101,7 @@ class Logger:
         self.log(logging.CRITICAL, message, tag)
 
     def get_traceback_string(self, exception):
-        # 获取异常的调用堆栈信息的字符串形式
+        # Retrieves the exception call stack information as a string.
         traceback_list = traceback.format_exception(
             type(exception), exception, exception.__traceback__)
         traceback_str = ''.join(traceback_list)
@@ -111,7 +112,7 @@ logger = Logger("Seraphine")
 
 
 if __name__ == "__main__":
-    # 示例：开启控制台输出
+    # Example: enable console output.
     log = Logger("Seraphine", console_output=True)
 
     log.debug("This is a debug message.")

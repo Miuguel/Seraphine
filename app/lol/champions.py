@@ -30,7 +30,7 @@ class ChampionAlias:
             async with aiohttp.ClientSession() as session:
                 res = await session.get(self.URL, proxy=None, ssl=False)
 
-                # 不知道为什么这样子不行：
+                # Don't know why this doesn't work:
                 # res = await res.json()
 
                 s = str(await res.read(), encoding='utf-8')
@@ -81,10 +81,10 @@ class ChampionAlias:
     @classmethod
     def getChampionsAlias(cls) -> dict:
         champions = ChampionAlias.data['champions']
-        cls.computeDict(champions, "901", lambda x, y: y + ",小火龙")# 斯莫德
-        cls.computeDict(champions, "950", lambda x, y: y + ",狗")# 纳亚菲利
-        cls.computeDict(champions, "902", lambda x, y: y + ",丁真")# 米利欧
-        cls.computeDict(champions, "897", lambda x, y: y + ",黑龙,n-word")# 奎桑提
+        cls.computeDict(champions, "901", lambda x, y: y + ",小火龙")# Smolder
+        cls.computeDict(champions, "950", lambda x, y: y + ",狗")# Naafiri
+        cls.computeDict(champions, "902", lambda x, y: y + ",丁真")# Milio
+        cls.computeDict(champions, "897", lambda x, y: y + ",黑龙,n-word")# K'Sante
         return champions
 
     @classmethod

@@ -45,7 +45,7 @@ from app.lol.tools import (parseAllyGameInfo, parseGameInfoByGameflowSession,
                            getAllyOrderByGameRole, getTeamColor, autoBan, autoPick,
                            autoComplete, autoSwap, autoTrade, ChampionSelection,
                            SERVERS_NAME, SERVERS_SUBSET, showOpggBuild, autoShow,
-                           autoSetSummonerSpell)
+                           autoSetSummonerSpell, isStatsEnabledForQueue)
 from app.lol.aram import AramBuff
 from app.lol.champions import ChampionAlias
 from app.lol.opgg import opgg
@@ -260,7 +260,19 @@ class MainWindow(FluentWindow):
         self.mainWindowHide.connect(self.__onWindowHide)
 
     def __initWindow(self):
-        self.setMinimumSize(1134, 826)
+        desktop = QApplication.desktop().availableGeometry()
+        w, h = desktop.width(), desktop.height()
+
+        # Don't let the window's floor be taller/wider than the actual screen
+        # (e.g. 1366x768 laptops have ~728px of usable height): the old fixed
+        # 1134x826 minimum didn't fit and clipped the bottom of the window
+        # off-screen, with no way to shrink it back down.
+        self.setMinimumSize(min(1134, w), min(826, h))
+
+        self.windowSize = QSize(min(self.windowSize.width(), w),
+                                 min(self.windowSize.height(), h))
+        self.resize(self.windowSize)
+
         self.setWindowIcon(QIcon("app/resource/images/logo.png"))
         self.setWindowTitle("Seraphine")
 
@@ -274,8 +286,6 @@ class MainWindow(FluentWindow):
         self.splashScreen.setIconSize(QSize(106, 106))
         self.splashScreen.raise_()
 
-        desktop = QApplication.desktop().availableGeometry()
-        w, h = desktop.width(), desktop.height()
         self.move(w // 2 - self.width() // 2, h // 2 - self.height() // 2)
 
         self.show()
@@ -412,6 +422,8 @@ class MainWindow(FluentWindow):
         careerAction = Action(Icon.PERSON, self.tr("Career"), self)
         searchAction = Action(Icon.SEARCH, self.tr("Search 👀"), self)
         gameInfoAction = Action(Icon.GAME, self.tr("Game Information"), self)
+        auxiliaryAction = Action(
+            Icon.WRENCH, self.tr("Auxiliary Functions"), self)
         settingsAction = Action(Icon.SETTING, self.tr("Settings"), self)
         quitAction = Action(Icon.EXIT, self.tr('Quit'), self)
 
@@ -429,6 +441,8 @@ class MainWindow(FluentWindow):
             lambda: showAndSwitch(self.searchInterface))
         gameInfoAction.triggered.connect(
             lambda: showAndSwitch(self.gameInfoInterface))
+        auxiliaryAction.triggered.connect(
+            lambda: showAndSwitch(self.auxiliaryFuncInterface))
         settingsAction.triggered.connect(
             lambda: showAndSwitch(self.settingInterface))
         quitAction.triggered.connect(quit)
@@ -438,6 +452,7 @@ class MainWindow(FluentWindow):
         self.trayMenu.addAction(careerAction)
         self.trayMenu.addAction(searchAction)
         self.trayMenu.addAction(gameInfoAction)
+        self.trayMenu.addAction(auxiliaryAction)
         self.trayMenu.addSeparator()
         self.trayMenu.addAction(settingsAction)
         self.trayMenu.addAction(quitAction)
@@ -731,7 +746,8 @@ class MainWindow(FluentWindow):
             msgBox.cancelButton.setText(self.tr('Exit'))
             self.update()
 
-            cfg.set(cfg.enableCloseToTray, msgBox.exec())
+            cfg.set(cfg.enableCloseToTray,
+                    (True if 1 == msgBox.exec() else False))
 
         if not cfg.get(cfg.enableCloseToTray) or self.isTrayExit:
             self.__terminateListeners()
@@ -774,6 +790,8 @@ class MainWindow(FluentWindow):
     async def __onGameStatusChanged(self, status):
         title = None
         isGaming = False
+
+        logger.critical(f"Client gameflow phase changed: {status}", TAG)
 
         if status == 'None':
             title = self.tr("Home")
@@ -865,6 +883,8 @@ class MainWindow(FluentWindow):
     # 进入英雄选择界面时触发
     async def __onChampionSelectBegin(self):
         self.championSelection.reset()
+        self.checkAndSwitchTo(self.gameInfoInterface)
+
         cSession, gSession = await asyncio.gather(connector.getChampSelectSession(),
                                                   connector.getGameflowSession())
 
@@ -884,8 +904,6 @@ class MainWindow(FluentWindow):
         currentSummonerId = self.currentSummoner['summonerId']
         info = await parseAllyGameInfo(cSession, currentSummonerId, queueId, useSGP=True)
         self.gameInfoInterface.updateAllySummoners(info)
-
-        self.checkAndSwitchTo(self.gameInfoInterface)
 
     # 英雄选择时，英雄改变 / 楼层改变时触发
     @asyncSlot(dict)
@@ -914,7 +932,7 @@ class MainWindow(FluentWindow):
         currentSummonerId = self.currentSummoner['summonerId']
 
         queueId = session['gameData']['queue']['id']
-        if queueId in (1700, 1090, 1100, 1110, 1130, 1160):  # 斗魂 云顶匹配 (排位)
+        if not isStatsEnabledForQueue(queueId):  # 斗魂 云顶 (Arena / TFT / Swarm)
             return
 
         # 如果是进游戏后开的软件，需要先把友方信息更新上去
@@ -1044,11 +1062,12 @@ class MainWindow(FluentWindow):
         for call in connector.callStack:
             logger.error(call, "Crash")
 
-        logger.error(str(self.searchInterface), "Crash")
-        logger.error(str(self.gameInfoInterface), "Crash")
-        logger.error(str(self.careerInterface), "Crash")
-        logger.error(str(self.auxiliaryFuncInterface), "Crash")
-        logger.error(str(self.settingInterface), "Crash")
+        # interfaces may not exist yet if the crash happened during __init__
+        for name in ('searchInterface', 'gameInfoInterface', 'careerInterface',
+                     'auxiliaryFuncInterface', 'settingInterface'):
+            interface = getattr(self, name, None)
+            if interface is not None:
+                logger.error(str(interface), "Crash")
 
         content = f"Seraphine ver.{BETA or VERSION}\n{'-'*5}\n{content}"
 

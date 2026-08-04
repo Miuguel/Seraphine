@@ -161,7 +161,12 @@ class OpggWindow(OpggWindowBase):
         self.setHomeInterfaceEnabled(True)
 
     def __initWindow(self):
-        self.setFixedSize(640, 826)
+        desktop = QApplication.desktop().availableGeometry()
+        # Don't let the fixed size exceed the actual screen (e.g. 1366x768
+        # laptops have ~728px of usable height) -- same issue fixed for the
+        # main window.
+        self.setFixedSize(min(640, desktop.width()),
+                          min(826, desktop.height()))
         self.setWindowIcon(QIcon("app/resource/images/opgg.svg"))
         self.setWindowTitle("OP.GG")
 
@@ -174,11 +179,17 @@ class OpggWindow(OpggWindowBase):
         self.modeComboBox.addItem(
             self.tr("Aram"), icon="app/resource/images/ha-victory.png", userData='aram')
         self.modeComboBox.addItem(
+            self.tr("ARAM: Mayhem"), icon="app/resource/images/ha-victory.png", userData='aram')
+        self.modeComboBox.addItem(
             self.tr("Arena"), icon="app/resource/images/arena-victory.png", userData='arena')
         self.modeComboBox.addItem(
             self.tr("Urf"), icon="app/resource/images/other-victory.png", userData='urf')
         self.modeComboBox.addItem(
             self.tr("Nexus Blitz"), icon="app/resource/images/other-victory.png", userData='nexus_blitz')
+        self.modeComboBox.addItem(
+            self.tr("League Classic"), icon="app/resource/images/other-victory.png", userData='classic')
+        self.modeComboBox.addItem(
+            self.tr("ARAM: Mayhem Classic-ish"), icon="app/resource/images/ha-victory.png", userData='aram_mayhem_classic')
 
         self.regionComboBox.addItem(
             self.tr("All regions"), icon="app/resource/images/global.svg", userData="global")
@@ -471,8 +482,8 @@ class OpggWindow(OpggWindowBase):
         position = self.positionComboBox.currentData()
         championId = self.buildInterface.getCurrentChampionId()
 
-        # 只有在排位模式下，可以选择对应的分路
-        if mode != 'ranked':
+        # 只有在排位模式（包括 League Classic，其 build 接口也按分路返回数据）下，可以选择对应的分路
+        if mode not in ('ranked', 'classic'):
             position = 'none'
             self.positionComboBox.setVisible(False)
         else:
@@ -494,7 +505,7 @@ class OpggWindow(OpggWindowBase):
 
         # 若英雄没有在特定位置下的数据，则根据得到的数据重新设置一下位置的 combo box
         if (pos := data['data']['summary']['position']) != position \
-                and mode == 'ranked':
+                and mode in ('ranked', 'classic'):
 
             # 在设置之前需要锁住 combo box changed 的槽函数，防止它自动刷新
             self.setAutoRefreshEnabled(False)

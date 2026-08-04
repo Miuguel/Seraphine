@@ -6,7 +6,7 @@ from app.common.qfluentwidgets import isDarkTheme
 
 class ColorLabel(QLabel, ColorChangeable):
     '''
-    该标签颜色会跟随对应 `type` 颜色的改变而自动改变
+    The label color will automatically change as the corresponding `type` color changes
     '''
 
     def __init__(self, text: str = None, type: str = None, parent=None):

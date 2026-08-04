@@ -1,5 +1,5 @@
 """
-该模块用于在 GitHub 发布新 Release 时，同步上传到 Gitee 上
+This module is used to synchronize new GitHub Releases to Gitee
 """
 
 import argparse

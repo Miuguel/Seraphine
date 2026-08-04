@@ -34,8 +34,8 @@ class Github:
     def getReleasesInfo(self):
         url = f"{self.githubApi}/repos/{self.user}/{self.repositories}/releases/latest"
 
-        if cfg.get(cfg.enableProxy):
-            proxy = {'https': cfg.get(cfg.proxyAddr)}
+        if cfg.get(cfg.enableGithubProxy):
+            proxy = {'https': cfg.get(cfg.githubProxyAddr)}
         else:
             proxy = None
 
@@ -48,17 +48,17 @@ class Github:
         """
         info = self.getReleasesInfo()
 
-        ver_info = self.__get_ver_info()
+        ver_info = self.__getVersionInfo()
         info["forbidden"] = ver_info.get("forbidden", False)
 
         if info.get("tag_name")[1:] != VERSION:
             return info
         return None
 
-    def __get_ver_info(self):
+    def __getVersionInfo(self):
         url = f'{self.githubApi}/repos/{self.user}/{self.repositories}/contents/document/ver.json'
-        if cfg.get(cfg.enableProxy):
-            proxy = {'https': cfg.get(cfg.proxyAddr)}
+        if cfg.get(cfg.enableGithubProxy):
+            proxy = {'https': cfg.get(cfg.githubProxyAddr)}
         else:
             proxy = None
 
@@ -72,8 +72,8 @@ class Github:
     def getNotice(self):
         url = f'{self.githubApi}/repos/{self.user}/{self.repositories}/contents/document/notice.md'
 
-        if cfg.get(cfg.enableProxy):
-            proxy = {'https': cfg.get(cfg.proxyAddr)}
+        if cfg.get(cfg.enableGithubProxy):
+            proxy = {'https': cfg.get(cfg.githubProxyAddr)}
         else:
             proxy = None
 
@@ -226,9 +226,7 @@ def getPortTokenServerByPidViaPsutil(pid):
 
 
 def getPortTokenServerByPidViaWmic():
-    '''
-    ### 需要管理员权限
-    '''
+    # Requires administrator privileges
     command = "wmic process WHERE name='LeagueClientUx.exe' GET commandline"
     output = subprocess.check_output(command, shell=True).decode("gbk")
 
@@ -241,7 +239,7 @@ def getPortTokenServerByPidViaWmic():
 
 def getPortTokenServerByPid(pid):
     '''
-    通过进程 id 获得启动命令行参数中的 port、token 以及登录服务器
+    Obtain the port, token, and login server from the command-line arguments of a process using its process ID.
     '''
 
     try:
@@ -252,7 +250,7 @@ def getPortTokenServerByPid(pid):
 
 def getFileProperties(fname):
     """
-    读取给定文件的所有属性, 返回一个字典.
+    Read all attributes of the given file and return them as a dictionary.
 
     returns : {'FixedFileInfo': {'Signature': -17890115, 'StrucVersion': 65536, 'FileVersionMS': 917513, 'FileVersionLS':
     38012988, 'ProductVersionMS': 917513, 'ProductVersionLS': 38012988, 'FileFlagsMask': 23, 'FileFlags': 0,
@@ -303,13 +301,13 @@ def getFileProperties(fname):
 def getLolClientVersion():
     gamePath = cfg.get(cfg.lolFolder)[0]
 
-    assert gamePath  # 必须有, 否则就是调用逻辑有问题 -- By Hpero4
+    assert gamePath  # Must exist, otherwise, there is a logical issue in the call -- By Hpero4
 
-    # 特判一下国服 -- By Hpero4
+    # Special handling for the Chinese server -- By Hpero4
     gamePath = gamePath.replace("/TCLS", "")
 
     lolExe = f"{gamePath}/Game/League of Legends.exe"
-    # 判断一下, 客户端特殊? 为啥会没有LOL的主程序 -- By Hpero4
+    # Check if the client is special? Why is the main LOL program missing? -- By Hpero4
     if not os.path.exists(lolExe):
         raise FileNotFoundError(lolExe)
 
@@ -318,19 +316,19 @@ def getLolClientVersion():
 
     assert lolVer
 
-    # 缩短至大版本号
+    # Shorten to the major version number
     return re.search(r"\d+\.\d+", lolVer).group(0)
 
 
 def getLolClientWindowPos() -> QRectF:
-    # 获取客户端窗口句柄
+    # Get the client window handle
     hwnd = win32gui.FindWindow("RCLIENT", "League of Legends")
 
-    # 如果没客户端，就直接 return 一个 None
+    # If there is no client, return None directly
     if not hwnd:
         return None
 
-    # 获取客户端窗口位置
+    # Get the client window position
     # struct RECT {
     #     LONG left;
     #     LONG top;
@@ -339,7 +337,7 @@ def getLolClientWindowPos() -> QRectF:
     # }
     rect = win32gui.GetWindowRect(hwnd)
 
-    # 窗口最小化的时候，比例不是 16:9，直接 return 一个 None
+    # When the window is minimized, the aspect ratio is not 16:9, return None directly
     if (rect[3] - rect[1]) / (rect[2] - rect[0]) != 0.5625:
         return None
 

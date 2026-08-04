@@ -7,7 +7,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QEasingCurve
 from PyQt5.QtGui import QPixmap, QColor, QCursor
 from qasync import asyncSlot
 
-from app.lol.tools import ToolsTranslator
+from app.lol.tools import ToolsTranslator, createAndSetRunePage
 from app.components.animation_frame import (ColorAnimationFrame,
                                             NoBorderColorAnimationFrame, CardWidget)
 from app.components.transparent_button import PrimaryButton
@@ -35,10 +35,12 @@ class BuildInterface(QFrame):
 
         self.titleBar = ChampionTitleBar()
         self.summonerSpells = SummonerSpellsWidget()
+        self.championPerks = ChampionPerksWidget()
+        self.classicRunes = ClassicRunesWidget()
+        self.legacyMasteries = LegacyMasteriesWidget()
         self.championSkills = ChampionSkillsWidget()
         self.championItems = ChampionItemWidget()
         self.championCounters = ChampionCountersWidget()
-        self.championPerks = ChampionPerksWidget()
         self.championAugments = ChampionAugmentsWidget()
         self.championSynergies = ChampionSynergiesWidget()
 
@@ -67,6 +69,8 @@ class BuildInterface(QFrame):
         self.scrollLayout.addWidget(self.titleBar)
         self.scrollLayout.addWidget(self.summonerSpells)
         self.scrollLayout.addWidget(self.championPerks)
+        self.scrollLayout.addWidget(self.classicRunes)
+        self.scrollLayout.addWidget(self.legacyMasteries)
         self.scrollLayout.addWidget(self.championSkills)
         self.scrollLayout.addWidget(self.championItems)
         self.scrollLayout.addWidget(self.championCounters)
@@ -84,12 +88,16 @@ class BuildInterface(QFrame):
         return self.championId
 
     def updateInterface(self, data: dict):
-        self.titleBar.updateWidget(data.get('summary'))
+        summary = data.get('summary')
+
+        self.titleBar.updateWidget(summary)
         self.summonerSpells.updateWidget(data.get('summonerSpells'))
-        self.championPerks.updateWidget(data.get('perks'), data.get('summary'))
+        self.championPerks.updateWidget(data.get('perks'), summary)
+        self.classicRunes.updateWidget(data.get('classicRunes'))
+        self.legacyMasteries.updateWidget(data.get('legacyMasteries'))
         self.championSkills.updateWidget(data.get('championSkills'))
         self.championItems.updateWidget(data.get('items'))
-        self.championCounters.updateWidget(data.get('counters'))
+        self.championCounters.updateWidget(data.get('counters'), summary)
         self.championAugments.updateWidget(data.get('augments'))
         self.championSynergies.updateWidget(data.get('synergies'))
 
@@ -159,11 +167,14 @@ class ChampionTitleBar(ColorAnimationFrame):
             self.banRateTextLabel.setText(self.tr("Pick Rate"))
             self.banRateLabel.setText(f"{data['pickRate']*100:.2f}%")
         else:
+            # Low-sample-size champions/positions (e.g. League Classic) may
+            # have no recorded stats at all -- fall back to 0 instead of
+            # crashing on None.
             self.winRateTextLabel.setText(self.tr("Win Rate"))
-            self.winRateLabel.setText(f"{data['winRate']*100:.2f}%")
+            self.winRateLabel.setText(f"{(data['winRate'] or 0)*100:.2f}%")
 
             self.pickRateTextLabel.setText(self.tr("Pick Rate"))
-            self.pickRateLabel.setText(f"{data['pickRate']*100:.2f}%")
+            self.pickRateLabel.setText(f"{(data['pickRate'] or 0)*100:.2f}%")
 
             if banRate := data['banRate']:
                 self.banRateTextLabel.setText(self.tr("Ban Rate"))
@@ -365,7 +376,257 @@ class SummonerSpellsWidget(BuildWidgetBase):
             return
 
         self.spell1.updateSpell(data[0])
-        self.spell2.updateSpell(data[1])
+
+        # Low-sample-size modes (e.g. League Classic) may only have one
+        # summoner spell combo with enough games recorded -- hide the
+        # second slot instead of crashing on a missing entry.
+        hasSecond = len(data) > 1
+        if hasSecond:
+            self.spell2.updateSpell(data[1])
+        self.spell2.setVisible(hasSecond)
+        self.vLine.setVisible(hasSecond)
+
+        self.setVisible(True)
+
+
+class ClassicRuneItemWidget(QFrame):
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.hBoxLayout = QHBoxLayout(self)
+
+        self.icon = RoundedLabel(radius=4)
+        self.icon.setFixedSize(28, 28)
+
+        self.textLayout = QVBoxLayout()
+        self.nameLabel = QLabel()
+        self.tooltipLabel = QLabel()
+
+        self.countLabel = QLabel()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.nameLabel.setObjectName("bodyLabel")
+        self.tooltipLabel.setObjectName("grayBodyLabel")
+        self.countLabel.setObjectName("boldBodyLabel")
+
+    def __initLayout(self):
+        self.textLayout.setContentsMargins(0, 0, 0, 0)
+        self.textLayout.setSpacing(0)
+        self.textLayout.addWidget(self.nameLabel)
+        self.textLayout.addWidget(self.tooltipLabel)
+
+        self.hBoxLayout.setContentsMargins(0, 4, 0, 4)
+        self.hBoxLayout.addWidget(self.icon)
+        self.hBoxLayout.addSpacing(8)
+        self.hBoxLayout.addLayout(self.textLayout)
+        self.hBoxLayout.addSpacerItem(QSpacerItem(
+            0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
+        self.hBoxLayout.addWidget(self.countLabel)
+
+    def updateWidget(self, data):
+        self.icon.setPicture(data['icon'])
+        self.nameLabel.setText(data['name'])
+        self.tooltipLabel.setText(data['tooltip'])
+        self.countLabel.setText(f"×{data['count']}")
+
+
+class ClassicRunesWidget(BuildWidgetBase):
+    """
+    League Classic / ARAM: Mayhem Classic-ish use the old pre-2017
+    Mark/Seal/Glyph/Quintessence rune system instead of the modern rune
+    trees rendered by ChampionPerksWidget -- this shows OP.GG's
+    "classic_runes" recommendation as a simple list instead.
+    """
+
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.vBoxLayout = QVBoxLayout(self)
+
+        self.headerLayout = QHBoxLayout()
+        self.titleLabel = QLabel(self.tr("Classic Runes"))
+        self.winRateLabel = QLabel()
+        self.gamesLabel = QLabel()
+
+        self.itemsLayout = QVBoxLayout()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.titleLabel.setObjectName("subtitleLabel")
+        self.winRateLabel.setObjectName("boldBodyLabel")
+        self.gamesLabel.setObjectName("grayBodyLabel")
+
+    def __initLayout(self):
+        self.headerLayout.setContentsMargins(0, 0, 0, 0)
+        self.headerLayout.addWidget(self.titleLabel)
+        self.headerLayout.addSpacerItem(QSpacerItem(
+            0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
+        self.headerLayout.addWidget(self.winRateLabel)
+        self.headerLayout.addSpacing(8)
+        self.headerLayout.addWidget(self.gamesLabel)
+
+        self.itemsLayout.setContentsMargins(0, 0, 0, 0)
+        self.itemsLayout.setSpacing(2)
+
+        self.vBoxLayout.setContentsMargins(13, 11, 13, 11)
+        self.vBoxLayout.addLayout(self.headerLayout)
+        self.vBoxLayout.addSpacing(6)
+        self.vBoxLayout.addLayout(self.itemsLayout)
+
+    def __clearItems(self):
+        for i in reversed(range(self.itemsLayout.count())):
+            item = self.itemsLayout.itemAt(i)
+            self.itemsLayout.removeItem(item)
+
+            if widget := item.widget():
+                widget.deleteLater()
+
+    def updateWidget(self, data):
+        if not data or not data[0].get('runes'):
+            self.setVisible(False)
+            return
+
+        page = data[0]
+
+        self.__clearItems()
+
+        for rune in page['runes']:
+            item = ClassicRuneItemWidget()
+            item.updateWidget(rune)
+            self.itemsLayout.addWidget(item)
+
+        if page['play']:
+            self.winRateLabel.setText(
+                f"{self.tr('Win rate')} {page['win']/page['play']*100:.2f}%")
+            self.gamesLabel.setText(f"{page['play']:,} " + self.tr("Games"))
+        else:
+            self.winRateLabel.setText("")
+            self.gamesLabel.setText("")
+
+        self.setVisible(True)
+
+
+class LegacyMasteryItemWidget(QFrame):
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.hBoxLayout = QHBoxLayout(self)
+
+        self.icon = RoundedLabel(radius=4)
+        self.icon.setFixedSize(24, 24)
+
+        self.textLayout = QVBoxLayout()
+        self.nameLabel = QLabel()
+        self.descriptionLabel = QLabel()
+
+        self.rankLabel = QLabel()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.nameLabel.setObjectName("bodyLabel")
+        self.descriptionLabel.setObjectName("grayBodyLabel")
+        self.descriptionLabel.setWordWrap(True)
+        self.rankLabel.setObjectName("boldBodyLabel")
+
+    def __initLayout(self):
+        self.textLayout.setContentsMargins(0, 0, 0, 0)
+        self.textLayout.setSpacing(0)
+        self.textLayout.addWidget(self.nameLabel)
+        self.textLayout.addWidget(self.descriptionLabel)
+
+        self.hBoxLayout.setContentsMargins(0, 4, 0, 4)
+        self.hBoxLayout.addWidget(self.icon)
+        self.hBoxLayout.addSpacing(8)
+        self.hBoxLayout.addLayout(self.textLayout)
+        self.hBoxLayout.addSpacerItem(QSpacerItem(
+            0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
+        self.hBoxLayout.addWidget(self.rankLabel)
+
+    def updateWidget(self, data):
+        self.icon.setPicture(data['icon'])
+        self.nameLabel.setText(data['name'])
+        self.descriptionLabel.setText(data['description'])
+        self.rankLabel.setText(f"{data['rank']}/{data['maxRank']}")
+
+
+class LegacyMasteriesWidget(BuildWidgetBase):
+    """
+    League Classic's old point-allocation mastery trees
+    (Offense/Defense/Utility), separate from the old runes shown by
+    ClassicRunesWidget -- OP.GG exposes this as "legacy_masteries".
+    """
+
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.vBoxLayout = QVBoxLayout(self)
+
+        self.titleLabel = QLabel(self.tr("Legacy Masteries"))
+        self.treesLayout = QVBoxLayout()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.titleLabel.setObjectName("subtitleLabel")
+
+    def __initLayout(self):
+        self.treesLayout.setContentsMargins(0, 0, 0, 0)
+        self.treesLayout.setSpacing(6)
+
+        self.vBoxLayout.setContentsMargins(13, 11, 13, 11)
+        self.vBoxLayout.addWidget(self.titleLabel)
+        self.vBoxLayout.addSpacing(6)
+        self.vBoxLayout.addLayout(self.treesLayout)
+
+    def __clearTrees(self):
+        for i in reversed(range(self.treesLayout.count())):
+            item = self.treesLayout.itemAt(i)
+            self.treesLayout.removeItem(item)
+
+            if widget := item.widget():
+                widget.deleteLater()
+            elif layout := item.layout():
+                while layout.count():
+                    sub = layout.takeAt(0)
+                    if subWidget := sub.widget():
+                        subWidget.deleteLater()
+
+    def updateWidget(self, data):
+        if not data:
+            self.setVisible(False)
+            return
+
+        trees = {}
+        for mastery in data:
+            trees.setdefault(mastery['tree'], []).append(mastery)
+
+        self.__clearTrees()
+
+        for tree, masteries in trees.items():
+            points = sum(m['rank'] for m in masteries)
+
+            treeLayout = QVBoxLayout()
+            treeLayout.setContentsMargins(0, 0, 0, 0)
+            treeLayout.setSpacing(0)
+
+            treeHeader = QLabel(f"{tree} ({points})")
+            treeHeader.setObjectName("boldBodyLabel")
+            treeLayout.addWidget(treeHeader)
+
+            for mastery in masteries:
+                item = LegacyMasteryItemWidget()
+                item.updateWidget(mastery)
+                treeLayout.addWidget(item)
+
+            self.treesLayout.addLayout(treeLayout)
 
         self.setVisible(True)
 
@@ -451,6 +712,10 @@ class ChampionSkillsWidget(BuildWidgetBase):
                 widget.deleteLater()
 
     def updateWidget(self, data):
+        if not data:
+            self.setVisible(False)
+            return
+
         self.__clearLayout(self.mainSkillLayout)
         self.__clearLayout(self.skillOrderLayout)
 
@@ -615,10 +880,20 @@ class ChampionItemWidget(BuildWidgetBase):
                 layout.addWidget(label)
 
     def updateWidget(self, data):
-        self.__updateLayout(self.startItems, data['startItems'])
-        self.__updateLayout(self.boots, data['boots'])
-        self.__updateLayout(self.coreItems, data['coreItems'])
-        self.__updateLayout(self.lastItems, data['lastItems'])
+        startItems = data.get('startItems') or []
+        boots = data.get('boots') or []
+
+        # 斗魂竞技场没有出门装, 该列用于展示棱彩装备
+        if not startItems:
+            startItems = data.get('prismItems') or []
+
+        self.__updateLayout(self.startItems, startItems)
+        self.__updateLayout(self.boots, boots)
+        self.__updateLayout(self.coreItems, data.get('coreItems') or [])
+        self.__updateLayout(self.lastItems, data.get('lastItems') or [])
+
+        # 某一列为空时隐藏中间的分隔线
+        self.vLine.setVisible(bool(startItems) and bool(boots))
 
         self.setVisible(True)
 
@@ -758,9 +1033,12 @@ class ChampionCountersWidget(BuildWidgetBase):
 
         self.hBoxLayout = QHBoxLayout(self)
 
-        self.strongAgainstLayout = QVBoxLayout()
+        self.strongAgainstWidget = QWidget()
+        self.strongAgainstLayout = QVBoxLayout(self.strongAgainstWidget)
         self.separatorLine = SeparatorLine(QFrame.Shape.VLine)
-        self.weakAgainstLayout = QVBoxLayout()
+
+        self.weakAgainstWidget = QWidget()
+        self.weakAgainstLayout = QVBoxLayout(self.weakAgainstWidget)
 
         self.__initWidget()
         self.__initLayout()
@@ -777,11 +1055,11 @@ class ChampionCountersWidget(BuildWidgetBase):
         self.weakAgainstLayout.setSpacing(6)
 
         self.hBoxLayout.setContentsMargins(13, 11, 13, 11)
-        self.hBoxLayout.addLayout(self.strongAgainstLayout)
+        self.hBoxLayout.addWidget(self.strongAgainstWidget)
         self.hBoxLayout.addSpacing(4)
         self.hBoxLayout.addWidget(self.separatorLine)
         self.hBoxLayout.addSpacing(4)
-        self.hBoxLayout.addLayout(self.weakAgainstLayout)
+        self.hBoxLayout.addWidget(self.weakAgainstWidget)
 
     def __updateLayout(self, layout: QLayout, data: list):
         for i in reversed(range(layout.count())):
@@ -795,7 +1073,7 @@ class ChampionCountersWidget(BuildWidgetBase):
             item = CounterChampionWidget(x)
             layout.addWidget(item)
 
-    def updateWidget(self, data):
+    def updateWidget(self, data, summary: dict):
         if not data:
             self.setVisible(False)
             return
@@ -809,6 +1087,17 @@ class ChampionCountersWidget(BuildWidgetBase):
 
         self.__updateLayout(self.strongAgainstLayout, strong)
         self.__updateLayout(self.weakAgainstLayout, weak)
+
+        tooltip = f"<b>{summary.get('name')}</b>" + \
+            self.tr("'s strong against")
+        self.strongAgainstWidget.setToolTip(tooltip)
+        self.strongAgainstWidget.installEventFilter(
+            ToolTipFilter(self.strongAgainstWidget, 300))
+
+        tooltip = f"<b>{summary.get('name')}</b>" + self.tr("'s weak against")
+        self.weakAgainstWidget.setToolTip(tooltip)
+        self.weakAgainstWidget.installEventFilter(
+            ToolTipFilter(self.weakAgainstWidget))
 
         self.setVisible(True)
 
@@ -897,10 +1186,25 @@ class ChampionPerksWidget(BuildWidgetBase):
     async def __onSetRunePageButtonClicked(self, _):
         data = self.data[self.selectedIndex]
         name = "Seraphine" + self.tr(": ") + self.summary['name']
+        primaryId = data['primaryId']
+        secondaryId = data['secondaryId']
+        perks = data['perks']
 
-        await connector.deleteCurrentRunePage()
-        await connector.createRunePage(
-            name, data['primaryId'], data['secondaryId'], data['perks'])
+        pages = await connector.getRunePages()
+
+        if not len(pages):
+            await createAndSetRunePage(name, primaryId, secondaryId, perks)
+            return
+
+        pageId = next((page.get("id")
+                      for page in pages
+                      if page.get("current") and page.get("isEditable")), None)
+
+        if not pageId:
+            await createAndSetRunePage(name, primaryId, secondaryId, perks)
+            return
+
+        await connector.putRunePage(pageId, name, primaryId, secondaryId, perks)
 
 
 class PerksSummaryWidget(NoBorderColorAnimationFrame):
@@ -998,7 +1302,10 @@ class PerksWidget(QFrame):
         self.__initLayout()
 
     def __initWidget(self):
-        pass
+        self.mainTitleIcon.installEventFilter(ToolTipFilter(
+            self.mainTitleIcon, 200, ToolTipPosition.TOP))
+        self.secondaryTitleIcon.installEventFilter(ToolTipFilter(
+            self.secondaryTitleIcon, 200, ToolTipPosition.TOP))
 
     def __initLayout(self):
         self.primaryPerksLayout.setSpacing(8)
@@ -1064,8 +1371,6 @@ class PerksWidget(QFrame):
         main = styles[main]
         self.mainTitleIcon.setIcon(main['icon'])
         self.mainTitleIcon.setToolTip(main['name'])
-        self.mainTitleIcon.installEventFilter(ToolTipFilter(
-            self.mainTitleIcon, 200, ToolTipPosition.TOP))
 
         for i, slot in enumerate(main['slots'][:4]):
             for perk in slot:
@@ -1086,8 +1391,6 @@ class PerksWidget(QFrame):
         sub = styles[sub]
         self.secondaryTitleIcon.setIcon(sub['icon'])
         self.secondaryTitleIcon.setToolTip(sub['name'])
-        self.secondaryTitleIcon.installEventFilter(ToolTipFilter(
-            self.secondaryTitleIcon, 200, ToolTipPosition.TOP))
 
         for i, slot in enumerate(sub['slots'][1:4]):
             for perk in slot:

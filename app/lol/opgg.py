@@ -1,21 +1,71 @@
+import os
+
 import aiohttp
 from async_lru import alru_cache
 
 from app.lol.connector import connector
+from app.common.config import cfg
 
 TAG = "opgg"
+
+CLASSIC_RUNE_ICON_FOLDER = "app/resource/game/classic rune icons"
+LEGACY_MASTERY_ICON_FOLDER = "app/resource/game/legacy mastery icons"
 
 
 class Opgg:
     def __init__(self):
         self.session = None
+        # Separate session (no base_url) for fetching assets off OP.GG's CDN
+        # host, which differs from the API host self.session is pinned to.
+        self.assetSession = None
+        self.proxy = None
+
+        if cfg.get(cfg.enableOpggProxy):
+            self.proxy = f"http://{cfg.get(cfg.opggProxyAddr)}"
 
     async def start(self):
         self.session = aiohttp.ClientSession("https://lol-api-champion.op.gg")
+        self.assetSession = aiohttp.ClientSession()
 
     async def close(self):
         if self.session:
             await self.session.close()
+        if self.assetSession:
+            await self.assetSession.close()
+
+    async def __get(self, url, params=None):
+        res = await self.session.get(url, params=params, ssl=False, proxy=self.proxy)
+        return await res.json()
+
+    async def __downloadAndCacheAsset(self, url, folder, key):
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        path = f"{folder}/{key}.png"
+
+        if not os.path.exists(path):
+            res = await self.assetSession.get(url, ssl=False, proxy=self.proxy)
+            data = await res.read()
+
+            with open(path, 'wb') as f:
+                f.write(data)
+
+        return path
+
+    async def getClassicRuneIcon(self, url, sourceToken):
+        """
+        League Classic's old-style rune icons (Mark/Seal/Glyph/Quintessence)
+        are hosted on OP.GG's own CDN, not exposed by the LCU -- cache them
+        locally the same way champion/item/rune icons are cached elsewhere.
+        """
+        return await self.__downloadAndCacheAsset(url, CLASSIC_RUNE_ICON_FOLDER, sourceToken)
+
+    async def getLegacyMasteryIcon(self, url, masteryId):
+        """
+        Same as getClassicRuneIcon, but for the old Offense/Defense/Utility
+        mastery tree icons -- also CDN-hosted by OP.GG, also not in the LCU.
+        """
+        return await self.__downloadAndCacheAsset(url, LEGACY_MASTERY_ICON_FOLDER, masteryId)
 
     @alru_cache(maxsize=512)
     async def __fetchTierList(self, region, mode, tier):
@@ -37,8 +87,8 @@ class Opgg:
 
     @alru_cache(maxsize=512)
     async def getChampionBuild(self, region, mode, championId, position, tier):
-        positions = await self.getChampionPositions(region, championId, tier)
-        if position not in positions and mode == 'ranked':
+        positions = await self.getChampionPositions(region, championId, tier, mode)
+        if position not in positions and positions and mode in ('ranked', 'classic'):
             position = positions[0]
 
         raw = await self.__fetchChampionBuild(region, mode, championId, position, tier)
@@ -71,19 +121,15 @@ class Opgg:
         }
 
     @alru_cache(maxsize=512)
-    async def getChampionPositions(self, region, championId, tier):
-        # 这个调用因为有 cache，所以还是挺快的
-        data = await self.__fetchTierList(region, "ranked", tier)
+    async def getChampionPositions(self, region, championId, tier, mode="ranked"):
+        # This call is quite fast due to caching
+        data = await self.__fetchTierList(region, mode, tier)
 
         for item in data['data']:
             if item['id'] == championId:
-                return [p['name'] for p in item['positions']]
+                return [p['name'] for p in item['positions'] or []]
 
         return []
-
-    async def __get(self, url, params=None):
-        res = await self.session.get(url, params=params, ssl=False, proxy=None)
-        return await res.json()
 
 
 class OpggDataParser:
@@ -91,9 +137,9 @@ class OpggDataParser:
     @staticmethod
     async def parseRankedTierList(data):
         '''
-        召唤师峡谷模式下的原始梯队数据，是所有英雄所有位置一起返回的
+        Original tier data for Summoner's Rift mode, returns all champions and positions together
 
-        在此函数内按照分路位置将它们分开
+        In this function, separate them by lane position
         '''
 
         data = data['data']
@@ -130,7 +176,7 @@ class OpggDataParser:
                     'counters': counters,
                 })
 
-        # 排名 / 梯队是乱的，所以排个序
+        # Ranking/tier is unordered, so sort it
         for tier in res.values():
             tier.sort(key=lambda x: x['rank'])
 
@@ -139,7 +185,7 @@ class OpggDataParser:
     @staticmethod
     async def parseOtherTierList(data):
         '''
-        处理其他模式下的原始梯队数据
+        Process original tier data for other modes
         '''
 
         data = data['data']
@@ -184,9 +230,11 @@ class OpggDataParser:
         name = connector.manager.getChampionNameById(championId)
 
         if position != 'none':
-            for p in summary['positions']:
+            stats = {}
+            # 数据量少的英雄 positions 可能为 None
+            for p in summary['positions'] or []:
                 if p['name'] == position:
-                    stats: dict = p['stats']
+                    stats: dict = p['stats'] or {}
                     break
 
             winRate = stats.get('win_rate')
@@ -194,12 +242,13 @@ class OpggDataParser:
             banRate = stats.get('ban_rate')
             kda = stats.get('kda')
 
-            tierData: dict = stats['tier_data']
+            tierData: dict = stats.get('tier_data') or {}
             tier = tierData.get("tier")
             rank = tierData.get("rank")
 
         else:
-            stats = summary['average_stats']
+            # 数据量少的英雄 average_stats 可能为 None
+            stats = summary['average_stats'] or {}
             winRate = stats.get('win_rate')
             pickRate = stats.get('pick_rate')
             banRate = stats.get('ban_rate')
@@ -209,6 +258,9 @@ class OpggDataParser:
 
         summonerSpells = []
         for s in data['summoner_spells']:
+            if 'play' not in s:
+                continue
+
             icons = [await connector.getSummonerSpellIcon(id)
                      for id in s['ids']]
 
@@ -220,16 +272,30 @@ class OpggDataParser:
                 'pickRate': s['pick_rate']
             })
 
-        skills = {
-            "masteries": data['skill_masteries'][0]['ids'],
-            "order": data['skills'][0]['order'],
-            'play': data['skills'][0]['play'],
-            'win': data['skills'][0]['win'],
-            'pickRate': data['skills'][0]['pick_rate']
-        }
+        # League Classic mixes static "recommendation" entries (no play/win/
+        # pick_rate, just a source_type tag) in among the real stat-backed
+        # ones whenever a champion/position doesn't have enough games --
+        # filter those out everywhere rather than crash on a missing key.
+        def withStats(items):
+            return [i for i in (items or []) if 'play' in i]
+
+        # Low-sample-size modes/positions (e.g. League Classic) may not have
+        # enough games recorded to have any skill-order data at all.
+        skillMasteries = withStats(data['skill_masteries'])
+        skillOrders = withStats(data['skills'])
+        if skillMasteries and skillOrders:
+            skills = {
+                "masteries": skillMasteries[0]['ids'],
+                "order": skillOrders[0]['order'],
+                'play': skillOrders[0]['play'],
+                'win': skillOrders[0]['win'],
+                'pickRate': skillOrders[0]['pick_rate']
+            }
+        else:
+            skills = None
 
         boots = []
-        for i in data['boots'][:3]:
+        for i in withStats(data['boots'])[:3]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             boots.append({
                 "icons": icons,
@@ -239,7 +305,7 @@ class OpggDataParser:
             })
 
         startItems = []
-        for i in data['starter_items'][:3]:
+        for i in withStats(data['starter_items'])[:3]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             startItems.append({
                 "icons": icons,
@@ -249,7 +315,7 @@ class OpggDataParser:
             })
 
         coreItems = []
-        for i in data['core_items'][:5]:
+        for i in withStats(data['core_items'])[:5]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             coreItems.append({
                 "icons": icons,
@@ -259,7 +325,7 @@ class OpggDataParser:
             })
 
         lastItems = []
-        for i in data['last_items'][:16]:
+        for i in withStats(data['last_items'])[:16]:
             lastItems.append(await connector.getItemIcon(i['ids'][0]))
 
         strongAgainst = []
@@ -294,6 +360,73 @@ class OpggDataParser:
         } for perk in data['runes']
         ]
 
+        # League Classic (and its ARAM: Mayhem Classic-ish variant) use the
+        # old pre-2017 Mark/Seal/Glyph/Quintessence rune system instead of
+        # the modern rune trees -- OP.GG exposes this separately as
+        # "classic_runes" since it has no relation to the modern "runes"
+        # field (which is always empty for these modes).
+        # Only the first page is ever shown (see ClassicRunesWidget), and
+        # alternate "recommendation" pages (source_type set instead of
+        # play/win/pick_rate) don't carry a source_token per rune -- so only
+        # parse that first page rather than crashing on the others.
+        classicRunePages = data.get('classic_runes') or []
+        classicRunes = [{
+            'runes': [{
+                'icon': await opgg.getClassicRuneIcon(rune['icon_url'], rune.get('source_token', rune['id'])),
+                'name': rune['name'],
+                'tooltip': rune['tooltip'],
+                'count': rune['count'],
+            } for rune in classicRunePages[0]['runes']],
+            'play': classicRunePages[0].get('play'),
+            'win': classicRunePages[0].get('win'),
+            'pickRate': classicRunePages[0].get('pick_rate'),
+        }] if classicRunePages else []
+
+        # ARAM: Mayhem Classic-ish has no runes at all (see classicRunes
+        # above), but -- like Mayhem and Arena -- does have an augment pick,
+        # exposed the same way Arena's "augment_group" is. Most modes don't
+        # have this field at all, so keep augments as None (not []) for
+        # them -- ChampionAugmentsWidget treats None as "hide", but an empty
+        # list would render as a blank card.
+        augmentGroup = data.get('augment_group')
+        hasAugmentData = augmentGroup and any(g['augments'] for g in augmentGroup)
+
+        # Not a nested comprehension on purpose: a comprehension-inside-a-
+        # comprehension containing `await` fails to compile on Python 3.8
+        # ("asynchronous comprehension outside of an asynchronous function"),
+        # which is what the CI packaging step still targets.
+        augments = None
+        if hasAugmentData:
+            augments = []
+            for group in augmentGroup:
+                arr = []
+                for aug in group['augments']:
+                    augId = aug['id']
+                    arr.append({
+                        "id": augId,
+                        "icon": await connector.getAugmentIcon(augId),
+                        "name": connector.manager.getAugmentsName(augId),
+                        "win": aug['win'],
+                        'play': aug['play'],
+                        'pickRate': aug['pick_rate']
+                    })
+                augments.append(arr)
+
+        # League Classic's old point-allocation mastery trees
+        # (Offense/Defense/Utility), separate from classicRunes above.
+        # OP.GG returns a couple of alternate "recommendation" pages with no
+        # play/win/pickRate to rank them by -- just show the first one.
+        legacyMasteryPages = data.get('legacy_masteries') or []
+        legacyMasteries = [{
+            'id': (mid := mastery['id']),
+            'icon': await opgg.getLegacyMasteryIcon(mastery['icon_url'], mid),
+            'name': mastery['name'],
+            'description': mastery['description'],
+            'tree': mastery['tree'],
+            'rank': mastery['rank'],
+            'maxRank': mastery['max_rank'],
+        } for mastery in (legacyMasteryPages[0]['masteries'] if legacyMasteryPages else [])]
+
         return {
             "summary": {
                 'name': name,
@@ -320,6 +453,9 @@ class OpggDataParser:
                 "weakAgainst": weakAgainst,
             },
             "perks": perks,
+            "classicRunes": classicRunes,
+            "legacyMasteries": legacyMasteries,
+            "augments": augments,
         }
 
     @staticmethod
@@ -348,44 +484,28 @@ class OpggDataParser:
             'pickRate': data['skills'][0]['pick_rate']
         }
 
-        boots = []
-        for i in data['boots'][:3]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            boots.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+        async def parseItemGroup(items, limit):
+            res = []
+            for i in (items or [])[:limit]:
+                icons = [await connector.getItemIcon(id) for id in i['ids']]
+                res.append({
+                    "icons": icons,
+                    "play": i['play'],
+                    "win": i['win'],
+                    'pickRate': i['pick_rate'],
+                    "averatePlace": i['total_place'] / i['play'],
+                    "firstRate": i['first_place'] / i['play']
+                })
 
-        startItems = []
-        for i in data['starter_items'][:3]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            startItems.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+            return res
 
-        coreItems = []
-        for i in data['core_items'][:5]:
-            icons = [await connector.getItemIcon(id) for id in i['ids']]
-            coreItems.append({
-                "icons": icons,
-                "play": i['play'],
-                "win": i['win'],
-                'pickRate': i['pick_rate'],
-                "averatePlace": i['total_place'] / i['play'],
-                "firstRate": i['first_place'] / i['play']
-            })
+        boots = await parseItemGroup(data.get('boots'), 3)
+        startItems = await parseItemGroup(data.get('starter_items'), 3)
+        prismItems = await parseItemGroup(data.get('prism_items'), 3)
+        coreItems = await parseItemGroup(data.get('core_items'), 5)
 
         lastItems = []
-        for i in data['last_items'][:16]:
+        for i in (data.get('last_items') or [])[:16]:
             lastItems.append(await connector.getItemIcon(i['ids'][0]))
 
         augments = []
@@ -432,6 +552,7 @@ class OpggDataParser:
             "items": {
                 "boots": boots,
                 "startItems": startItems,
+                "prismItems": prismItems,
                 "coreItems": coreItems,
                 "lastItems": lastItems,
             },

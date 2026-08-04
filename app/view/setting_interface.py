@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QFileDialog
 
 from app.common.icons import Icon
 from app.common.config import (cfg, YEAR, AUTHOR, VERSION, FEEDBACK_URL, GITHUB_URL, isWin11,
-                               BETA)
+                               BETA, LOCAL_PATH)
 from app.common.style_sheet import StyleSheet
 from app.components.seraphine_interface import SeraphineInterface
 from app.components.setting_cards import (LineEditSettingCard, GameTabColorSettingCard,
@@ -80,13 +80,17 @@ class SettingInterface(SeraphineInterface):
         self.autoShowOpggCard = SwitchSettingCard(
             Icon.WINDOW, self.tr("Show OP.GG window automatically"),
             self.tr("Show OP.GG window automatically when champion selection starts"),
-            cfg.autoShowOpgg)
+            cfg.autoShowOpgg, self.opggGroup)
         self.opggOnTopCard = SwitchSettingCard(
             Icon.PADDINGTOP, self.tr(
                 "Show OP.GG window on top"),
             self.tr(
                 "Show OP.GG window in front of other windows while selecting champions"),
-            cfg.enableOpggOnTop)
+            cfg.enableOpggOnTop, self.opggGroup)
+        self.opggProxyCard = ProxySettingCard(
+            self.tr("OP.GG HTTP proxy"), self.tr(
+                "Using a proxy when connecting to OP.GG"),
+            cfg.enableOpggProxy, cfg.opggProxyAddr, self.opggGroup)
 
         self.generalGroup = SettingCardGroup(self.tr("General"),
                                              self.scrollWidget)
@@ -208,7 +212,7 @@ class SettingInterface(SeraphineInterface):
             Icon.LANGUAGE,
             self.tr('Language'),
             self.tr('Set your preferred language for Seraphine'),
-            texts=['简体中文', 'English',
+            texts=['简体中文', 'English', 'Português',
                    self.tr('Use system setting')],
             parent=self.personalizationGroup)
 
@@ -222,9 +226,9 @@ class SettingInterface(SeraphineInterface):
             cfg.enableCheckUpdate
         )
         self.httpProxyCard = ProxySettingCard(
-            self.tr("HTTP proxy"), self.tr(
+            self.tr("GitHub HTTP proxy"), self.tr(
                 "Using a proxy when connecting to GitHub"),
-            cfg.enableProxy, cfg.proxyAddr, self.updateGroup)
+            cfg.enableGithubProxy, cfg.githubProxyAddr, self.updateGroup)
 
         self.aboutGroup = SettingCardGroup(self.tr("About"), self.scrollWidget)
 
@@ -276,6 +280,7 @@ class SettingInterface(SeraphineInterface):
 
         self.opggGroup.addSettingCard(self.autoShowOpggCard)
         self.opggGroup.addSettingCard(self.opggOnTopCard)
+        self.opggGroup.addSettingCard(self.opggProxyCard)
 
         self.generalGroup.addSettingCard(self.lolFolderCard)
         self.generalGroup.addSettingCard(self.enableStartLolWithApp)
@@ -325,7 +330,7 @@ class SettingInterface(SeraphineInterface):
             lambda: QDesktopServices.openUrl(QUrl(FEEDBACK_URL)))
         self.deleteResourceCard.clicked.connect(self.__showFlyout)
         self.viewLogCard.clicked.connect(
-            lambda: os.system(f'explorer {os.getcwd()}\\log')
+            lambda: os.system(f'explorer {LOCAL_PATH}\\log')
         )
 
     def __onLolFolderCardClicked(self):

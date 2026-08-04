@@ -7,7 +7,7 @@
 </p>
 
 <div align="center">
-
+  
   [![Licença](https://img.shields.io/github/license/Miuguel/Seraphine?style=flat&label=License)](https://github.com/Miuguel/Seraphine/blob/main/LICENSE)
   [![Forks](https://img.shields.io/github/forks/Miuguel/Seraphine?style=flat&label=Forks)](https://github.com/Miuguel/Seraphine/forks)
   [![Stars](https://img.shields.io/github/stars/Miuguel/Seraphine?style=flat&label=Stars)](https://github.com/Miuguel/Seraphine/stargazers)
@@ -38,10 +38,10 @@ Execute `main.py` para iniciar:
 ```shell
   python main.py
 ```
-### Desinstalar Seraphine 😑
+### Desinstalar Seraphine 
 Basta excluir a pasta onde o Seraphine está localizado e remover a pasta `%AppData%/Seraphine`.
 
-## Recursos (em constante atualização) 🥰
+## Recursos (em constante atualização) 
 - Consulta de estatísticas (não suporta Teamfight Tactics)
   - Consulta de estatísticas de invocadores no mesmo servidor ✅
   - Consulta automática das estatísticas dos aliados após entrar no BP ✅
@@ -77,12 +77,12 @@ Basta excluir a pasta onde o Seraphine está localizado e remover a pasta `%AppD
     - Remove insígnias com um clique ✅
     - Remove molduras de ícones com um clique ✅
 
-## Perguntas Frequentes (FAQ) 🧐
-### Q: Posso ser banido por usar Seraphine? 😨
+## Perguntas Frequentes (FAQ) 
+### Q: Posso ser banido por usar Seraphine? 
 Seraphine usa apenas a API do cliente do LoL e **não modifica** arquivos do jogo ou lê dados da memória. Portanto, é improvável que você seja banido, mas não garantimos que isso não aconteça.
 
 ### Q: Fui banido, e agora?
-Tente recorrer ou aguarde o desbloqueio 😭
+Tente recorrer ou aguarde o desbloqueio 
 
 ### Q: Por que algumas funções estão inativas ou demoradas?
 O Seraphine depende dos dados fornecidos pela API do cliente do LoL. Se houver problemas, geralmente são causados pelo servidor do LoL, não pelo Seraphine.
@@ -90,14 +90,15 @@ O Seraphine depende dos dados fornecidos pela API do cliente do LoL. Se houver p
 ### Q: Por que o cliente do jogo fecha sozinho?
 Suspeitamos que o cliente do jogo é sensível a algumas requisições HTTP.
 
-## Como ajudar a melhorar o Seraphine 😘
+## Como ajudar a melhorar o Seraphine 
 Se encontrar bugs ou comportamentos inesperados, relate um [issue](https://github.com/Miuguel/Seraphine/issues). Para novas sugestões, abra um issue ou envie um [PR](https://github.com/Miuguel/Seraphine/pulls)!
 
-## Empacotando um executável 📂
+## Empacotando um executável 
 Instale `Pyinstaller` e garanta que o comando `7z` está disponível:
 ```shell
-  pip install pyinstaller==5.13
+  pip install pyinstaller
 ```
+> Nota: a versão `5.13` fixada anteriormente depende do `pkg_resources`, removido nas versões recentes do `setuptools` (usadas em ambientes Python 3.11+). Use a versão mais recente do PyInstaller nesses ambientes.
 Execute o script `make.ps1` para criar `Seraphine.7z`:
 ``` shell
   .\make -dest .

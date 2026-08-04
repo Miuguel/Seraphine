@@ -38,26 +38,27 @@ class StyleSheet(StyleSheetBase, Enum):
 
 class ColorChangeable(QObject):
     '''
-    继承该基类的实例，会响应 `signalBus.customColorChanged` 信号，若对应 `type`
-    的颜色有更新，该实例会自动更新为相应新的颜色
+    Instances inheriting from this base class will respond to the `signalBus.customColorChanged` signal.  
+    If the color corresponding to `type` is updated, the instance will automatically  
+    update to the new corresponding color.
 
-    继承该类需要重写 `setColor()` 方法，针对实例本体类型的不同（如 `QLabel`、`QFrame`，或其他什么东西）
-    来更新自己的颜色
+    Inheriting this class requires overriding the `setColor()` method to update its own color  
+    based on the instance type (such as `QLabel`, `QFrame`, or other components).
     '''
 
     def __init__(self, type: str = None):
-        # 允许初始化时 type 为空
+        # Allows `type` to be empty during initialization.
         if type:
             self.type = type
             colorManager.regiesterWidget(self)
 
-            # 更新自己的颜色
+            # Updates its own color.
             c1, c2, c3, c4 = self.getColors()
             self.setColor(c1, c2, c3, c4)
         else:
             self.type = None
 
-        # 如果自己被析构了，就将自己 manager 中记录的自己的引用给删了
+        # If the object is destroyed, remove its reference recorded in the `manager`.
         self.destroyed.connect(lambda: colorManager.removeWidget(self))
 
     def getColors(self):
@@ -86,7 +87,7 @@ class __ColorManager():
         signalBus.customColorChanged.connect(self.__updateColor)
         qconfig.themeChanged.connect(self.__updateAllColor)
 
-    # 新建颜色 type 以及颜色的计算方法
+    # Creates a new color `type` and defines its calculation method.
     def registerColor(self, type: str):
         def wrapper(func):
             self.items[type] = {
@@ -132,7 +133,7 @@ class __ColorManager():
 
 colorManager = __ColorManager()
 
-# 有关胜负等一切组件的颜色
+# Defines colors for all components related to victory and defeat.
 
 
 @colorManager.registerColor('win')
@@ -153,7 +154,7 @@ def __getRemakeColor():
     return __getStyleSheetColor(color)
 
 
-# 动画背景组件的默认颜色
+# Sets the default color for the animated background component.
 @colorManager.registerColor('default')
 def __getDefaultColor():
     color = QColor(233, 233, 233, 13 if isDarkTheme() else 170)
@@ -165,29 +166,29 @@ def __getDefaultColor():
     return color, c1, c2, c3
 
 
-# 文字组件的颜色
+# Sets the color for text components.
 @colorManager.registerColor("text")
 def __getTextColor():
     color = QColor('white') if isDarkTheme() else QColor('black')
     return color, color, color, color
 
 
-# 对局信息界面提示组队的颜色
+# Sets the color for the team formation prompt in the match information interface.
 @colorManager.registerColor('team1')
 def __getTeam1Color():
-    # TODO: 开放用户自定义设置
+    # TODO: Allow user-customized settings.
     color = QColor.fromRgb(255, 176, 27, 39)
     return __getStyleSheetColor(color)
 
 
 @colorManager.registerColor('team2')
 def __getTeam2Color():
-    # TODO: 开放用户自定义设置
+    # TODO: Allow user-customized settings.
     color = QColor.fromRgb(255, 51, 153, 39)
     return __getStyleSheetColor(color)
 
 
-# OPGG 英雄梯队中英雄卡片的颜色
+# Defines the color of hero cards in the OPGG hero ranking.
 @colorManager.registerColor('tier0')
 def __getTier0Color():
     color = QColor.fromRgb(232, 64, 87, 39)
@@ -256,7 +257,7 @@ def __getThemeColor():
 
 def __getStyleSheetColor(color: QColor):
     '''
-    返回主颜色、鼠标悬停颜色、鼠标按下颜色以及边框颜色
+    Returns the main color, hover color, mouse press color, and border color.
     '''
     r, g, b, a = color.getRgb()
 

@@ -640,6 +640,32 @@ class LolClientConnector(QObject):
         return res["games"]
 
     @retry()
+    async def getTftGamesByPuuid(self, puuid, count=20):
+        """
+        Retrieves TFT match history by PUUID.
+
+        Args:
+            puuid (str): The PUUID of the summoner.
+            count (int, optional): How many games to retrieve. Defaults to 20.
+
+        Returns:
+            list: A list of TFT games ({'json': {...}, 'metadata': {...}}).
+
+        Raises:
+            SummonerGamesNotFound: If the match history is not found.
+        """
+        params = {"begin": 0, "count": count}
+        res = await self.__get(
+            f"/lol-match-history/v1/products/tft/{puuid}/matches", params
+        )
+        res = await res.json()
+
+        if "games" not in res:
+            raise SummonerGamesNotFound()
+
+        return res["games"]
+
+    @retry()
     async def getGameDetailByGameId(self, gameId):
         res = await self.__get(f"/lol-match-history/v1/games/{gameId}")
 
@@ -899,6 +925,13 @@ class LolClientConnector(QObject):
         return await res.json()
 
     @retry()
+    async def getFriends(self):
+        """
+        获取好友列表
+        """
+        res = await self.__get("/lol-chat/v1/friends")
+        return await res.json()
+
     async def getSummonerById(self, summonerId):
         res = await self.__get(f"/lol-summoner/v1/summoners/{summonerId}")
 
@@ -947,23 +980,64 @@ class LolClientConnector(QObject):
                 f"deleteCurrentRunePage error {stack = }, {e =}", TAG)
 
     @retry()
-    async def createRunePage(self, name, primaryId, secondaryId, perks):
+    async def createRunePage(self, name, primaryId):
         body = {
+            "name": name,
+            "primaryStyleId": primaryId,
+            "isEditable": True,
+            "current": True,
+        }
+
+        res = await self.__post("/lol-perks/v1/pages", data=body)
+        return await res.json()
+
+    @retry()
+    async def putRunePage(self, id, name, primaryId, secondaryId, perks):
+        body = {
+            "id": id,
+            "isRecommendationOverride": False,
+            "isTemporary": False,
             "name": name,
             "primaryStyleId": primaryId,
             "subStyleId": secondaryId,
             "selectedPerkIds": perks,
-            "current": True
+            "current": True,
         }
 
-        res = await self.__post("/lol-perks/v1/pages", data=body)
+        res = await self.__put(f"/lol-perks/v1/pages/{id}", data=body)
         res = await res.json()
+
+    @retry()
+    async def getRuneInventory(self):
+        res = await self.__get("/lol-perks/v1/inventory")
+        return await res.json()
+
+    @retry()
+    async def getRunePages(self):
+        res = await self.__get('/lol-perks/v1/pages')
+        return await res.json()
 
     @retry()
     async def setSummonerSpells(self, spell1Id, spell2Id):
         data = {'spell1Id': spell1Id, 'spell2Id': spell2Id}
 
         return await self.__patch("/lol-champ-select/v1/session/my-selection", data)
+
+    @retry()
+    async def getConversation(self):
+        res = await self.__get("/lol-chat/v1/conversations")
+        return await res.json()
+
+    @retry()
+    async def sendConversationNotify(self, id, message):
+        body = {
+            "body": message,
+            "id": id,
+            "type": "celebration"
+        }
+
+        res = await self.__post(f"/lol-chat/v1/conversations/{id}/messages", data=body)
+        return await res.json()
 
     async def spectate(self, summonerName):
         info = await self.getSummonerByName(summonerName)
@@ -1079,6 +1153,12 @@ class LolClientConnector(QObject):
     @retry()
     async def getClientZoom(self):
         res = await self.__get("/riotclient/zoom-scale")
+
+        return await res.json()
+
+    @retry()
+    async def getFriends(self):
+        res = await self.__get("/lol-chat/v1/friends")
 
         return await res.json()
 
@@ -1219,9 +1299,17 @@ class JsonManager:
 
         self.champs = {item["id"]: item["name"] for item in champions}
 
+        # alias 是英雄的内部英文名 (如 MonkeyKing), TFT 的 character_id 使用它
+        self.champAliases = {item["alias"].lower(): item["id"]
+                             for item in champions if "alias" in item}
+
         self.champions = {item: {"skins": {}} for item in self.champs.values()}
         self.queues = {
-            item["id"]: {"mapId": item["mapId"], "name": item["name"]}
+            # Some queues (e.g. League Classic's 4310) ship with an empty "name" and
+            # only carry a human-readable label in "description".
+            item["id"]: {"mapId": item["mapId"],
+                         "name": item["name"] or item.get("description", ""),
+                         "gameMode": item.get("gameMode")}
             for item in queueData
         }
 
@@ -1307,33 +1395,52 @@ class JsonManager:
             12: ("嚎哭深渊", "Howling Abyss"),
             21: ("极限闪击", "Nexus Blitz"),
             30: ("斗魂竞技场", "Arena"),
+            453: ("经典召唤师峡谷", "League Classic"),
         }
 
         key = mapId if mapId in maps else -1
-        index = 1 if cfg.language.value == Language.ENGLISH else 0
+        # Map names are in English for every language except explicit
+        # Chinese -- this also covers Language.AUTO, which most users
+        # (including non-Chinese system locales) leave selected by default.
+        index = 0 if cfg.language.value == Language.CHINESE_SIMPLIFIED else 1
 
         return maps[key][index]
 
     def getNameMapByQueueId(self, queueId):
         if queueId == 0:
             return {
-                "name": "Custom" if cfg.language.value == Language.ENGLISH else "自定义"
+                "name": "Custom" if cfg.language.value == Language.ENGLISH else 
+                       "Personalizado" if cfg.language.value == Language.PORTUGUESE else 
+                       "自定义"
             }
 
         data = self.queues[queueId]
         mapId = data["mapId"]
         name = data["name"]
 
-        if cfg.language.value == Language.ENGLISH:
-            with open("app/resource/i18n/gamemodes.json", encoding="utf-8") as f:
-                translate = json.loads(f.read())
-
-                if name in translate:
-                    name = translate[name]
+        with open("app/resource/i18n/gamemodes.json", encoding="utf-8") as f:
+            translate = json.loads(f.read())
+            
+            if name in translate:
+                if isinstance(translate[name], dict):
+                    if cfg.language.value == Language.ENGLISH:
+                        name = translate[name]["en"]
+                    elif cfg.language.value == Language.PORTUGUESE:
+                        name = translate[name]["pt"]
+                else:
+                    # Handle old format for backward compatibility
+                    if cfg.language.value == Language.ENGLISH:
+                        name = translate[name]
 
         map = self.getMapNameById(mapId)
-
         return {"map": map, "name": name}
+
+    def getGameModeByQueueId(self, queueId):
+        data = self.queues.get(queueId)
+        return data["gameMode"] if data else None
+
+    def getChampionIdByAlias(self, alias):
+        return self.champAliases.get(alias.lower(), -1)
 
     def getMapIconByMapId(self, mapId, win):
         result = "victory" if win else "defeat"

@@ -12,6 +12,7 @@ from ..common.qfluentwidgets import (TableWidget, PushButton, ComboBox,
                                      InfoBarPosition)
 
 from app.components.game_infobar_widget import GameInfoBar
+from app.components.tft_game_infobar import TftGameInfoBar
 from app.components.champion_icon_widget import RoundIcon
 from app.components.profile_level_icon_widget import RoundLevelAvatar
 from app.components.summoner_name_button import SummonerName
@@ -22,7 +23,7 @@ from app.common.icons import Icon
 from app.common.signals import signalBus
 from app.common.config import cfg
 from app.lol.connector import connector
-from app.lol.tools import (parseGames, parseSummonerData,
+from app.lol.tools import (parseGames, parseTftGames, parseSummonerData,
                            getRecentTeammates, parseDetailRankInfo, SERVERS_NAME, SERVERS_SUBSET)
 from ..components.seraphine_interface import SeraphineInterface
 
@@ -132,7 +133,7 @@ class CareerInterface(SeraphineInterface):
 
         self.recentTeamButton.setEnabled(True)
 
-        self.rankTable.setRowCount(2)
+        self.rankTable.setRowCount(3)
         self.rankTable.setColumnCount(9)
         self.rankTable.verticalHeader().hide()
         self.rankTable.setWordWrap(False)
@@ -152,14 +153,20 @@ class CareerInterface(SeraphineInterface):
             self.tr('Ranked Solo'),
         ], [
             self.tr('Ranked Flex'),
+        ], [
+            self.tr('Ranked TFT'),
         ]]
 
         self.filterComboBox.addItems([
             self.tr('All'),
             self.tr('Normal'),
             self.tr("A.R.A.M."),
+            self.tr("ARAM: Mayhem"),
             self.tr("Ranked Solo"),
-            self.tr("Ranked Flex")
+            self.tr("Ranked Flex"),
+            self.tr("Teamfight Tactics"),
+            self.tr("League Classic"),
+            self.tr("ARAM: Mayhem Classic-ish"),
         ])
         self.filterComboBox.setCurrentIndex(0)
         self.winsLabel.setToolTip(
@@ -452,13 +459,16 @@ class CareerInterface(SeraphineInterface):
                 self.tr('Ranked Solo'),
             ], [
                 self.tr('Ranked Flex'),
+            ], [
+                self.tr('Ranked TFT'),
             ]]
             self.copyButton.setEnabled(False)
 
         if not self.isLoginSummoner():
-            for i in range(0, 2):
+            for i in range(len(self.rankInfo)):
                 for j in [1, 2, 4]:
-                    self.rankInfo[i][j] = '--'
+                    if j < len(self.rankInfo[i]):
+                        self.rankInfo[i][j] = '--'
 
         self.__updateTable()
 
@@ -517,7 +527,8 @@ class CareerInterface(SeraphineInterface):
             self.gameInfoLayout.addSpacerItem(
                 QSpacerItem(1, 1, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-    def __onfilterComboBoxChanged(self, index):
+    @asyncSlot(int)
+    async def __onfilterComboBoxChanged(self, index):
         self.gameInfoArea.delegate.vScrollBar.resetValue(0)
         self.gameInfoArea.verticalScrollBar().setSliderPosition(0)
 
@@ -531,14 +542,24 @@ class CareerInterface(SeraphineInterface):
             if item.widget():
                 item.widget().deleteLater()
 
+        if index == 6:  # Teamfight Tactics
+            await self.__updateTftGames()
+            return
+
         if index == 1:
-            targetId = 430
+            targetId = (400, 430)  # Normal Draft / Blind (legacy)
         elif index == 2:
             targetId = 450
         elif index == 3:
-            targetId = 420
+            targetId = 2400
         elif index == 4:
+            targetId = 420
+        elif index == 5:
             targetId = 440
+        elif index == 7:
+            targetId = 4310  # League Classic
+        elif index == 8:
+            targetId = 2450  # ARAM: Mayhem Classic-ish
         else:
             targetId = 0
 
@@ -561,6 +582,44 @@ class CareerInterface(SeraphineInterface):
         kda += f"{(kills + assists) / (1 if deaths == 0 else deaths):.1f}"
         kda += self.tr(")")
         self.kdaLabel.setText(kda)
+
+        self.gameInfoLayout.addSpacerItem(
+            QSpacerItem(1, 1, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+    async def __updateTftGames(self):
+        puuid = self.puuid
+
+        if not puuid:
+            return
+
+        try:
+            games = await connector.getTftGamesByPuuid(puuid)
+            hitGames, wins, losses, averagePlacement = await parseTftGames(
+                games, puuid)
+        except:
+            hitGames, wins, losses, averagePlacement = [], 0, 0, 0
+
+        # 若加载过程中切换了筛选项或召唤师, 丢弃结果
+        if self.filterComboBox.currentIndex() != 6 or puuid != self.puuid:
+            return
+
+        for game in hitGames:
+            bar = TftGameInfoBar(game)
+            bar.setMaximumHeight(86)
+            self.gameInfoLayout.addWidget(bar)
+            self.gameInfoLayout.addSpacing(5)
+
+        self.recent20GamesLabel.setText(
+            f"{self.tr('Recent matches')} {self.tr('(Last')} {len(hitGames)} {self.tr('games)')}"
+        )
+        self.winsLabel.setText(f"{self.tr('Top 4:')} {wins}")
+        self.lossesLabel.setText(f"{self.tr('Bottom 4:')} {losses}")
+
+        if hitGames:
+            self.kdaLabel.setText(
+                f"{self.tr('Avg placement:')} {averagePlacement:.1f}")
+        else:
+            self.kdaLabel.setText(f"{self.tr('Avg placement:')} --")
 
         self.gameInfoLayout.addSpacerItem(
             QSpacerItem(1, 1, QSizePolicy.Minimum, QSizePolicy.Expanding))

@@ -77,7 +77,7 @@ class UpdateMessageBox(MessageBoxBase):
         self.myYesButton.clicked.connect(self.__onYesButtonClicked)
         self.myCancelButton.clicked.connect(self.__onCancelButtonClicked)
 
-        # 简单判断下打开方式
+        # Simply determine the way it was opened
         if not os.path.exists("Seraphine.exe"):
             self.infoLabel.setVisible(True)
             self.infoLabel.setText(
@@ -85,7 +85,7 @@ class UpdateMessageBox(MessageBoxBase):
 
             self.myYesButton.setEnabled(False)
 
-        # 当前版本被禁用时, 不允许忽略版本
+        # When the current version is disabled, ignoring the version is not allowed
         self.myCancelButton.setEnabled(not self.info["forbidden"])
 
     def __initLayout(self):
@@ -98,13 +98,13 @@ class UpdateMessageBox(MessageBoxBase):
     @asyncSlot()
     async def __onYesButtonClicked(self):
         '''
-        该函数负责
-        1. 删除 `LOCAL_PATH` 中之前可能下载过的文件
-        2. 重新下载新版本压缩包
-        3. 解压缩，并删除压缩包
-        4. 释放并运行 bat 文件，关闭自己
-        5. 删除当前文件夹下的自己，并将解压好的新版本拷贝进来
-        6. 重新运行自己
+        This function is responsible for:
+        1. Deleting previously downloaded files in `LOCAL_PATH`
+        2. Re-downloading the new version archive
+        3. Extracting the archive and deleting it afterward
+        4. Releasing and executing the bat file, then shutting itself down
+        5. Deleting itself from the current folder and copying the extracted new version
+        6. Restarting itself
         '''
 
         # url = f"{github.proxyApi}/{self.info['assets'][0]['browser_download_url']}"

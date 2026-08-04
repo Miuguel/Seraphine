@@ -1,4 +1,5 @@
 from enum import Enum
+from copy import deepcopy
 import os
 import sys
 
@@ -7,12 +8,13 @@ from PyQt5.QtCore import QLocale, QSize
 
 from .qfluentwidgets import (qconfig, QConfig, ConfigItem, FolderValidator, BoolValidator,
                              OptionsConfigItem, OptionsValidator, ConfigSerializer,
-                             RangeConfigItem, RangeValidator, EnumSerializer, ColorConfigItem)
+                             RangeConfigItem, RangeValidator, EnumSerializer, ColorConfigItem, ConfigValidator)
 
 
 class Language(Enum):
     CHINESE_SIMPLIFIED = QLocale(QLocale.Chinese, QLocale.China)
     ENGLISH = QLocale(QLocale.English)
+    PORTUGUESE = QLocale(QLocale.Portuguese)
     AUTO = QLocale()
 
 
@@ -35,6 +37,27 @@ class QSizeSerializer(ConfigSerializer):
 
 def isWin11():
     return sys.platform == 'win32' and sys.getwindowsversion().build >= 22000
+
+
+class QueueFilterValidator(ConfigValidator):
+    def validate(self, value):
+        keys = ["420", "430", "440", "450", "480", "2400", "4310", "2450"]
+
+        for key in keys:
+            if key not in value:
+                return False
+
+        return True
+
+    def correct(self, value):
+        keys = ["420", "430", "440", "450", "480", "2400", "4310", "2450"]
+        new = deepcopy(value)
+
+        for key in keys:
+            if key not in value:
+                new[key] = []
+
+        return new
 
 
 class Config(QConfig):
@@ -160,8 +183,15 @@ class Config(QConfig):
     logLevel = OptionsConfigItem(
         "General", "LogLevel", 40, OptionsValidator([10, 20, 30, 40]), restart=True)
 
-    enableProxy = ConfigItem("General", "EnableProxy", False, BoolValidator())
-    proxyAddr = ConfigItem("General", "HttpProxy", "")
+    enableGithubProxy = ConfigItem(
+        "General", "EnableGithubProxy", False, BoolValidator())
+    githubProxyAddr = ConfigItem(
+        "General", "GithubProxyAddr", "127.0.0.1:10809")
+
+    enableOpggProxy = ConfigItem(
+        "General", "EnableOpggProxy", False, BoolValidator(), restart=True)
+    opggProxyAddr = ConfigItem(
+        "General", "OpggProxyAddr", "127.0.0.1:10809")
 
     opggRegion = ConfigItem("Functions", "OpggRegion", "kr",
                             OptionsValidator(["kr", "global"]), restart=True)
@@ -203,11 +233,15 @@ class Config(QConfig):
         "440": [],
         "450": [],
         "480": [],
-    })
+        "2400": [],
+        "4310": [],
+        "2450": [],
+    }, QueueFilterValidator())
+
 
 YEAR = 2023
 AUTHOR = "Zzaphkiel"
-VERSION = "1.1.4"
+VERSION = "1.3.0"
 BETA = None
 FEEDBACK_URL = "https://github.com/Zzaphkiel/Seraphine/issues?q=is%3Aissue"
 GITHUB_URL = "https://github.com/Zzaphkiel/Seraphine"

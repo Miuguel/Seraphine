@@ -1,5 +1,33 @@
 # 忽略 Python 字节码文件
 **/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.env
+.venv
+env/
+venv/
+ENV/
+.idea/
+.vscode/
+*.log
+.DS_Store
 
 # 忽略测试模块
 test.py

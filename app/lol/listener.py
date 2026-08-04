@@ -15,7 +15,7 @@ TAG = "Listener"
 
 class LolProcessExistenceListener(QThread):
     def __init__(self, parent):
-        # 当前 Seraphine 连接的客户端 pid
+        # Current Seraphine connected client pid
         self.runningPid = 0
 
         super().__init__(parent)
@@ -28,24 +28,25 @@ class LolProcessExistenceListener(QThread):
             return
 
         while True:
-            # 取一下当前运行中的所有客户端 pid
+            # Get all currently running client pids
             pids = getLolClientPids(path)
 
-            # 如果有客户端正在运行
+            # If there are clients running
             if len(pids) != 0:
 
-                # 如果当前没有连接客户端，则是第一个客户端启动了
+                # If no client is currently connected, then the first client has started
                 if self.runningPid == 0:
                     self.runningPid = pids[0]
                     signalBus.lolClientStarted.emit(self.runningPid)
 
-                # 如果当前有客户端启动中，但是当前连接的客户端不在这些客户端里
-                # 则说明是原来多开了客户端，现在原本连接的客户端关了，则切换到新的客户端
+                # If there is a client running, but the currently connected client is not among them
+                # This means it was a multi-client situation, and now the originally connected client has closed,
+                # so switch to the new client
                 elif self.runningPid not in pids:
                     self.runningPid = pids[0]
                     signalBus.lolClientChanged.emit(self.runningPid)
 
-            # 如果没有任何客户端在运行，且上一次检查时有客户端在运行
+            # If no clients are running, and there was a client running in the last check
             else:
                 if self.runningPid and not isLolGameProcessExist(path):
                     self.runningPid = 0

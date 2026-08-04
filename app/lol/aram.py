@@ -12,8 +12,8 @@ from app.common.util import getLolClientVersion
 
 class AramBuff:
     """
-    #### 数据使用已获得授权
-    Powered by: 大乱斗之家
+    #### Data usage has been authorized
+    Powered by: ARAM Home
     Site: http://www.jddld.com
     """
     ARAM_CFG_PATH = f"{LOCAL_PATH}/AramBuff.json"
@@ -31,16 +31,16 @@ class AramBuff:
 
     def __needUpdate(self):
         """
-        检查缓存的数据与当前版本是否匹配, 若不匹配尝试更新
+        Check if the cached data matches the current version, if not, try to update
 
-        尽可能在游戏启动后再调用, 否则当存在多个客户端时, `cfg.lolFolder` 不一定是准确的
-        （外服国服可能版本不同）
+        It's best to call this after the game starts, otherwise when multiple clients exist,
+        `cfg.lolFolder` may not be accurate (different versions between regions)
 
         @return :
-        - `True` -> 需要更新
-        - `False` -> 无需更新
+        - `True` -> needs update
+        - `False` -> no update needed
 
-        TODO: 暂未提供历史版本数据查询接口
+        TODO: Historical version data query interface not yet provided
         """
         try:
             lolVersion = getLolClientVersion()
@@ -56,7 +56,7 @@ class AramBuff:
             except:
                 return True
 
-            # 兼容老版本的 json
+            # Compatible with older versions of JSON
             if AramBuff.data.get('version') == None:
                 return True
 

@@ -17,6 +17,30 @@ SERVERS_NAME = {
     "HN10": "黑色玫瑰", "HN1": "艾欧尼亚", "BGP2": "峡谷之巅"
 }
 
+# 斗魂竞技场 -- Arena (gameMode CHERRY): 1700/1710 legacy 2v2x8, 1750 current 3x6
+ARENA_QUEUE_IDS = (1700, 1710, 1750)
+
+# League Classic (patch 26.15, released 2026-07-29, gameMode JADE, mapId 453):
+# matchmade Normal / Co-op vs AI / Custom Blind / Custom Draft on the old Season
+# 3-era Summoner's Rift. Standard SR-shaped match stats, no special parsing needed
+# -- only queue recognition for filters/history/OPGG below.
+CLASSIC_QUEUE_IDS = (4310, 4320, 3260, 3262)
+
+# ARAM: Mayhem Classic-ish / "ARAM: Desordem Raiz" (patch 26.15, released 2026-07-29,
+# gameMode KIWI_JADE, mapId 12): ARAM variant using the Classic 60-champion roster,
+# classic items and themed augments. Distinct from the existing "ARAM: Mayhem" queue
+# (2400). Standard ARAM-shaped match stats. Matchmade + custom.
+ARAM_MAYHEM_CLASSIC_QUEUE_IDS = (2450, 3280)
+
+# Game modes whose matches carry no SR-style stats to display
+# (Arena, Teamfight Tactics and Swarm PvE)
+STATS_EXCLUDED_GAME_MODES = ('CHERRY', 'TFT', 'STRAWBERRY')
+
+
+def isStatsEnabledForQueue(queueId):
+    gameMode = connector.manager.getGameModeByQueueId(queueId)
+    return gameMode not in STATS_EXCLUDED_GAME_MODES
+
 SERVERS_SUBSET = {
     "NJ100": ["祖安", "皮尔特沃夫", "巨神峰", "教育网", "男爵领域", "均衡教派", "影流", "守望之海"],
     "GZ100": ["卡拉曼达", "暗影岛", "征服之海", "诺克萨斯", "战争学院", "雷瑟守备"],
@@ -46,6 +70,7 @@ class ToolsTranslator(QObject):
 
         self.rankedSolo = self.tr('Ranked Solo')
         self.rankedFlex = self.tr("Ranked Flex")
+        self.rankedTft = self.tr("Ranked TFT")
 
         self.unranked = self.tr("Unranked")
         self.unknown = self.tr("Unknown")
@@ -70,10 +95,11 @@ def translateTier(orig: str, short=False) -> str:
 
     index = 1 if short else 0
 
-    if cfg.language.value == Language.ENGLISH:
-        return orig.capitalize()
-    else:
+    # 只有中文才需要翻译段位名
+    if cfg.language.value == Language.CHINESE_SIMPLIFIED:
         return maps[orig.capitalize()][index]
+    else:
+        return orig.capitalize()
 
 
 def timeStampToStr(stamp):
@@ -187,7 +213,7 @@ async def parseSummonerData(summoner, rankTask, gameTask):
 
 
 async def parseGameData(game):
-    timeStamp = game["gameCreation"]  # 毫秒级时间戳
+    timeStamp = game["gameCreation"]  # Millisecond timestamp
     time = timeStampToStr(game['gameCreation'])
     shortTime = timeStampToShortStr(game['gameCreation'])
     gameId = game['gameId']
@@ -349,7 +375,7 @@ async def parseGameDetailData(puuid, game):
     for participant in game['participantIdentities']:
         participantId = participant['participantId']
         summonerName = participant['player'].get(
-            'gameName') or participant['player'].get('summonerName')  # 兼容外服
+            'gameName') or participant['player'].get('summonerName')  # Compatible with other regions
         summonerPuuid = participant['player']['puuid']
         isCurrent = (summonerPuuid == puuid)
 
@@ -363,7 +389,7 @@ async def parseGameDetailData(puuid, game):
             if summoner['participantId'] == participantId:
                 stats = summoner['stats']
 
-                if queueId != 1700:
+                if queueId not in ARENA_QUEUE_IDS:
                     subteamPlacement = None
                     tid = summoner['teamId']
                 else:
@@ -374,7 +400,7 @@ async def parseGameDetailData(puuid, game):
                     remake = stats['gameEndedInEarlySurrender']
                     win = stats['win']
 
-                    if queueId == 1700:
+                    if queueId in ARENA_QUEUE_IDS:
                         cherryResult = subteamPlacement
 
                 championId = summoner['championId']
@@ -423,7 +449,7 @@ async def parseGameDetailData(puuid, game):
                     else:
                         rank = rank['queueMap']
 
-                        if queueId == 1700 and 'CHERRY' in rank:
+                        if queueId in ARENA_QUEUE_IDS and 'CHERRY' in rank:
                             rankInfo = rank["CHERRY"]
                             lp = rankInfo['ratedRating']
                         else:
@@ -493,10 +519,10 @@ async def parseGameDetailData(puuid, game):
 
 def getTeammates(game, targetPuuid):
     """
-    通过 game 信息获取目标召唤师的队友
+    Get teammates of the target summoner through game information
 
     @param game: @see connector.getGameDetailByGameId
-    @param targetPuuid: 目标召唤师 puuid
+    @param targetPuuid: Target summoner's puuid
     @return: @see res
     """
     targetParticipantId = None
@@ -512,9 +538,9 @@ def getTeammates(game, targetPuuid):
 
     for player in game['participants']:
         if player['participantId'] == targetParticipantId:
-            if game['queueId'] != 1700:
+            if game['queueId'] not in ARENA_QUEUE_IDS:
                 tid = player['teamId']
-            else:  # 斗魂竞技场
+            else:  # Arena mode
                 tid = player['stats']['subteamPlacement']
 
             win = player['stats']['win']
@@ -526,13 +552,13 @@ def getTeammates(game, targetPuuid):
         'queueId': game['queueId'],
         'win': win,
         'remake': remake,
-        'summoners': [],  # 队友召唤师 (由于兼容性, 未修改字段名)
-        'enemies': []  # 对面召唤师, 若有多个队伍会全放这里面
+        'summoners': [],  # Teammate summoners (field name unchanged for compatibility)
+        'enemies': []  # Enemy summoners, all placed here if there are multiple teams
     }
 
     for player in game['participants']:
 
-        if game['queueId'] != 1700:
+        if game['queueId'] not in ARENA_QUEUE_IDS:
             cmp = player['teamId']
         else:
             cmp = player['stats']['subteamPlacement']
@@ -545,7 +571,7 @@ def getTeammates(game, targetPuuid):
                 res['summoners'].append(
                     {'summonerId': s['summonerId'], 'name': s['summonerName'], 'puuid': s['puuid'], 'icon': s['profileIcon']})
             else:
-                # 当前召唤师在该对局使用的英雄, 自定义对局没有该字段
+                # Current summoner's champion in this game, custom games don't have this field
                 res["championId"] = player.get('championId', -1)
         else:
             res['enemies'].append(
@@ -704,80 +730,48 @@ def parseRankInfoFromSGP(info):
 
 
 def parseDetailRankInfo(rankInfo):
-    soloRankInfo = rankInfo['queueMap']['RANKED_SOLO_5x5']
-    soloTier = translateTier(soloRankInfo['tier'])
-    soloDivision = soloRankInfo['division']
-    if soloTier == '--' or soloDivision == 'NA':
-        soloDivision = ""
-
-    soloHighestTier = translateTier(soloRankInfo['highestTier'])
-    soloHighestDivision = soloRankInfo['highestDivision']
-    if soloHighestTier == '--' or soloHighestDivision == 'NA':
-        soloHighestDivision = ""
-
-    solxPreviousSeasonEndTier = translateTier(
-        soloRankInfo['previousSeasonEndTier'])
-    soloPreviousSeasonDivision = soloRankInfo[
-        'previousSeasonEndDivision']
-    if solxPreviousSeasonEndTier == '--' or soloPreviousSeasonDivision == 'NA':
-        soloPreviousSeasonDivision = ""
-
-    soloWins = soloRankInfo['wins']
-    soloLosses = soloRankInfo['losses']
-    soloTotal = soloWins + soloLosses
-    soloWinRate = soloWins * 100 // soloTotal if soloTotal != 0 else 0
-    soloLp = soloRankInfo['leaguePoints']
-
-    flexRankInfo = rankInfo['queueMap']['RANKED_FLEX_SR']
-    flexTier = translateTier(flexRankInfo['tier'])
-    flexDivision = flexRankInfo['division']
-    if flexTier == '--' or flexDivision == 'NA':
-        flexDivision = ""
-
-    flexHighestTier = translateTier(flexRankInfo['highestTier'])
-    flexHighestDivision = flexRankInfo['highestDivision']
-    if flexHighestTier == '--' or flexHighestDivision == 'NA':
-        flexHighestDivision = ""
-
-    flexPreviousSeasonEndTier = translateTier(
-        flexRankInfo['previousSeasonEndTier'])
-    flexPreviousSeasonEndDivision = flexRankInfo[
-        'previousSeasonEndDivision']
-
-    if flexPreviousSeasonEndTier == '--' or flexPreviousSeasonEndDivision == 'NA':
-        flexPreviousSeasonEndDivision = ""
-
-    flexWins = flexRankInfo['wins']
-    flexLosses = flexRankInfo['losses']
-    flexTotal = flexWins + flexLosses
-    flexWinRate = flexWins * 100 // flexTotal if flexTotal != 0 else 0
-    flexLp = flexRankInfo['leaguePoints']
-
     pt = ToolsTranslator()
 
+    def parseQueue(queueType, label):
+        info = rankInfo['queueMap'][queueType]
+
+        tier = translateTier(info['tier'])
+        division = info['division']
+        if tier == '--' or division == 'NA':
+            division = ""
+
+        highestTier = translateTier(info['highestTier'])
+        highestDivision = info['highestDivision']
+        if highestTier == '--' or highestDivision == 'NA':
+            highestDivision = ""
+
+        previousSeasonEndTier = translateTier(info['previousSeasonEndTier'])
+        previousSeasonEndDivision = info['previousSeasonEndDivision']
+        if previousSeasonEndTier == '--' or previousSeasonEndDivision == 'NA':
+            previousSeasonEndDivision = ""
+
+        wins = info['wins']
+        losses = info['losses']
+        total = wins + losses
+        winRate = wins * 100 // total if total != 0 else 0
+        lp = info['leaguePoints']
+
+        return [
+            label,
+            str(total),
+            str(winRate) + ' %' if total != 0 else '--',
+            str(wins),
+            str(losses),
+            f'{tier} {division}',
+            str(lp),
+            f'{highestTier} {highestDivision}',
+            f'{previousSeasonEndTier} {previousSeasonEndDivision}',
+        ]
+
     return [
-        [
-            pt.rankedSolo,
-            str(soloTotal),
-            str(soloWinRate) + ' %' if soloTotal != 0 else '--',
-            str(soloWins),
-            str(soloLosses),
-            f'{soloTier} {soloDivision}',
-            str(soloLp),
-            f'{soloHighestTier} {soloHighestDivision}',
-            f'{solxPreviousSeasonEndTier} {soloPreviousSeasonDivision}',
-        ],
-        [
-            pt.rankedFlex,
-            str(flexTotal),
-            str(flexWinRate) + ' %' if flexTotal != 0 else '--',
-            str(flexWins),
-            str(flexLosses),
-            f'{flexTier} {flexDivision}',
-            str(flexLp),
-            f'{flexHighestTier} {flexHighestDivision}',
-            f'{flexPreviousSeasonEndTier} {flexPreviousSeasonEndDivision}',
-        ],
+        parseQueue('RANKED_SOLO_5x5', pt.rankedSolo),
+        parseQueue('RANKED_FLEX_SR', pt.rankedFlex),
+        parseQueue('RANKED_TFT', pt.rankedTft),
     ]
 
 
@@ -794,8 +788,11 @@ def parseGames(games, targetId=0):
     kills, deaths, assists, wins, losses = 0, 0, 0, 0, 0
     hitGames = []
 
+    if targetId and not isinstance(targetId, tuple):
+        targetId = (targetId,)
+
     for game in games:
-        if not targetId or game['queueId'] == targetId:
+        if not targetId or game['queueId'] in targetId:
             hitGames.append(game)
 
             if not game['remake']:
@@ -809,6 +806,90 @@ def parseGames(games, targetId=0):
                     losses += 1
 
     return hitGames, kills, deaths, assists, wins, losses
+
+
+async def parseTftGames(games, puuid):
+    """
+    解析云顶之弈战绩数据
+
+    @param games: 由 `connector.getTftGamesByPuuid` 获取到的数据
+    @param puuid: 目标召唤师的 puuid
+    @return: hitGames, wins (前四), losses, averagePlacement
+    """
+
+    hitGames = []
+    wins, losses, placementSum = 0, 0, 0
+
+    for game in games:
+        data = game['json']
+        participants = data.get('participants') or []
+
+        me = next(
+            (p for p in participants if p.get('puuid') == puuid), None)
+        if me is None:
+            continue
+
+        queueId = data.get('queueId') or data.get('queue_id') or 0
+
+        try:
+            modeName = connector.manager.getNameMapByQueueId(queueId)['name']
+        except:
+            modeName = "TFT"
+
+        units = []
+        for unit in me.get('units') or []:
+            characterId = unit.get('character_id') or ''
+
+            # character_id 形如 TFT17_Talon, 取英雄 alias 部分
+            alias = characterId.split('_', 1)[-1]
+            championId = connector.manager.getChampionIdByAlias(alias)
+            icon = await connector.getChampionIcon(championId)
+
+            units.append({
+                'icon': icon,
+                'tier': unit.get('tier', 0),
+                'rarity': unit.get('rarity', 0),
+            })
+
+        units.sort(key=lambda x: (x['rarity'], x['tier']), reverse=True)
+
+        placement = me.get('placement', 0)
+        win = placement != 0 and placement <= 4
+
+        if placement != 0:
+            placementSum += placement
+            if win:
+                wins += 1
+            else:
+                losses += 1
+
+        # game_datetime 是字符串, gameCreation 是整数
+        try:
+            stamp = float(data.get('game_datetime')
+                          or data.get('gameCreation') or 0)
+        except (TypeError, ValueError):
+            stamp = 0
+
+        try:
+            length = float(data.get('game_length') or 0)
+        except (TypeError, ValueError):
+            length = 0
+
+        hitGames.append({
+            'gameId': data.get('gameId') or data.get('game_id'),
+            'placement': placement,
+            'win': win,
+            'modeName': modeName,
+            'setName': f"Set {data.get('tft_set_number')}" if data.get('tft_set_number') else "",
+            'time': timeStampToStr(stamp),
+            'duration': secsToStr(length),
+            'level': me.get('level', 0),
+            'units': units,
+        })
+
+    averagePlacement = (placementSum / (wins + losses)) if wins + losses else 0
+
+    return hitGames, wins, losses, averagePlacement
 
 
 async def parseAllyGameInfo(session, currentSummonerId, queueID, useSGP=False):
@@ -856,7 +937,7 @@ async def parseGameInfoByGameflowSession(session, currentSummonerId, side, useSG
     data = session['gameData']
     queueId = data['queue']['id']
 
-    if queueId in (1700, 1090, 1100, 1110, 1130, 1160):  # 斗魂 云顶匹配 (排位)
+    if not isStatsEnabledForQueue(queueId):  # 斗魂 云顶 (Arena / TFT / Swarm)
         return None
 
     if side == 'enemy':
@@ -925,7 +1006,7 @@ def getAllyOrderByGameRole(session, currentSummonerId):
 
 def getTeamColor(session, currentSummonerId):
     '''
-    输入 session 以及当前召唤师 id，输出 summonerId -> 颜色的映射
+    Input session and current summoner id, output summonerId -> color mapping
     '''
     data = session['gameData']
     ally, enemy = separateTeams(data, currentSummonerId)
@@ -1093,7 +1174,7 @@ async def parseSummonerGameInfo(item, queueId, currentSummonerId):
 
 async def getSummonerGamesInfoViaSGP(item, queueID, currentSummonerId):
     '''
-    使用 SGP 接口取战绩信息
+    Get match history information using SGP interface
     '''
     puuid = item.get('puuid')
 
@@ -1149,47 +1230,25 @@ async def getSummonerGamesInfoViaSGP(item, queueID, currentSummonerId):
         getTeammatesFromSGPGame(
             game,
             puuid
-        ) for game in origGamesInfo['games'][:1]  # 避免空报错, 查上一局的队友(对手)
+        ) for game in origGamesInfo['games'][:1]  # Avoid empty errors, check teammates (enemies) from previous game
     ]
 
     recentlyChampionName = ""
     fateFlag = None
 
-    if teammatesInfo:  # 判个空, 避免太久没有打游戏的玩家或新号引发异常
+    if teammatesInfo:  # Check for empty to avoid exceptions for players who haven't played for a long time or new accounts
         if currentSummonerId in [t['summonerId'] for t in teammatesInfo[0]['summoners']]:
-            # 上把队友
+            # Last game teammate
             fateFlag = "ally"
         elif currentSummonerId in [t['summonerId'] for t in teammatesInfo[0]['enemies']]:
-            # 上把对面
+            # Last game opponent
             fateFlag = "enemy"
         recentlyChampionId = max(
-            teammatesInfo and teammatesInfo[0]['championId'], 0)  # 取不到时是-1, 如果-1置为0
+            teammatesInfo and teammatesInfo[0]['championId'], 0)  # Default to 0 if -1
         recentlyChampionName = connector.manager.champs.get(
             recentlyChampionId)
 
-    # 适用于 LCU API 返回值
-    # return {
-    #     "name": summoner.get("gameName"),
-    #     'tagLine': summoner.get('tagLine'),
-    #     "icon": icon,
-    #     'championId': championId,
-    #     "level": summoner["summonerLevel"],
-    #     "rankInfo": rankInfo,
-    #     "gamesInfo": gamesInfo,
-    #     "xpSinceLastLevel": summoner["xpSinceLastLevel"],
-    #     "xpUntilNextLevel": summoner["xpUntilNextLevel"],
-    #     "puuid": puuid,
-    #     "summonerId": summoner['summonerId'],
-    #     "kda": [kill, deaths, assists],
-    #     "cellId": item.get("cellId"),
-    #     "selectedPosition": item.get("selectedPosition"),
-    #     "fateFlag": fateFlag,
-    #     "isPublic": summoner["privacy"] == "PUBLIC",
-    #     # 最近游戏的英雄 (用于上一局与与同一召唤师游玩之后显示)
-    #     "recentlyChampionName": recentlyChampionName
-    # }
-
-    # 适用于 SGP API 返回值
+    # For SGP API return value
     return {
         "name": summonerName,
         'tagLine': tagLine,
@@ -1207,7 +1266,7 @@ async def getSummonerGamesInfoViaSGP(item, queueID, currentSummonerId):
         "selectedPosition": item.get("selectedPosition"),
         "fateFlag": fateFlag,
         "isPublic": summoner["privacy"] == "PUBLIC",
-        # 最近游戏的英雄 (用于上一局与与同一召唤师游玩之后显示)
+        # Recent game champion (used to display after playing with the same summoner in the previous game)
         "recentlyChampionName": recentlyChampionName
     }
 
@@ -1218,7 +1277,7 @@ def getTeammatesFromSGPGame(game, puuid):
 
     for player in json['participants']:
         if player['puuid'] == puuid:
-            if queueId != 1700:
+            if queueId not in ARENA_QUEUE_IDS:
                 tid = player['teamId']
             else:  # 斗魂竞技场
                 tid = player['subteamPlacement']
@@ -1237,7 +1296,7 @@ def getTeammatesFromSGPGame(game, puuid):
     }
 
     for player in json['participants']:
-        if queueId != 1700:
+        if queueId not in ARENA_QUEUE_IDS:
             cmp = player['teamId']
         else:
             cmp = player['subteamPlacement']
@@ -1266,12 +1325,12 @@ def getTeammatesFromSGPGame(game, puuid):
 
 async def parseGamesDataFromSGP(game, puuid):
     """
-    解析由 SGP 接口得到的具体到某一局的对局记录信息
+    Parse specific match record information obtained from SGP interface
     """
 
     game = game['json']
 
-    timeStamp = game["gameCreation"]  # 毫秒级时间戳
+    timeStamp = game["gameCreation"]  # Millisecond timestamp
     time = timeStampToStr(game['gameCreation'])
     shortTime = timeStampToShortStr(game['gameCreation'])
     gameId = game['gameId']
@@ -1468,19 +1527,23 @@ async def showOpggBuild(data, selection: ChampionSelection):
     if selection.queueId == None:
         if data.get('benchEnabled'):
             mode = "aram"
-        elif len(data['myTeam']) == 2:
+        elif len(data['myTeam']) in (2, 3):  # Arena: 2v2 legacy / 3x6 current
             mode = 'arena'
         else:
             mode = ""
     else:
-        if selection.queueId == 450:
+        if selection.queueId in (450, 2400):  # ARAM / ARAM: Mayhem
             mode = 'aram'
-        elif selection.queueId in (1700, 1710):
+        elif selection.queueId in ARENA_QUEUE_IDS:
             mode = 'arena'
         elif selection.queueId == 1300:
             mode = 'nexus_blitz'
-        elif selection.queueId in (900, 1900):
+        elif selection.queueId in (900, 901, 1900, 740, 741):  # ARURF / URF / URF Clash
             mode = 'urf'
+        elif selection.queueId in CLASSIC_QUEUE_IDS:
+            mode = 'classic'
+        elif selection.queueId in ARAM_MAYHEM_CLASSIC_QUEUE_IDS:
+            mode = 'aram_mayhem_classic'
         else:
             mode = 'ranked'
 
@@ -1813,13 +1876,21 @@ async def autoShow(data, selection: ChampionSelection):
 
 async def rollAndSwapBack():
     """
-    摇骰子并切换回之前的英雄
-    todo: 界面
+    Roll the dice and switch back to the previous champion
+    todo: interface
     """
     championId = await connector.getCurrentChampion()
 
     await connector.reroll()
     await connector.benchSwap(championId)
+
+
+async def createAndSetRunePage(name, primaryId, secondaryId, perks):
+    pages = await connector.createRunePage(name, primaryId)
+
+    if id := pages.get('id'):
+        await connector.putRunePage(id, name, primaryId,
+                                    secondaryId, perks)
 
 
 async def fixLCUWindowViaExe():

@@ -390,14 +390,27 @@ class OpggDataParser:
         # list would render as a blank card.
         augmentGroup = data.get('augment_group')
         hasAugmentData = augmentGroup and any(g['augments'] for g in augmentGroup)
-        augments = None if not hasAugmentData else [[{
-            "id": (augId := aug['id']),
-            "icon": await connector.getAugmentIcon(augId),
-            "name": connector.manager.getAugmentsName(augId),
-            "win": aug['win'],
-            'play': aug['play'],
-            'pickRate': aug['pick_rate']
-        } for aug in group['augments']] for group in augmentGroup]
+
+        # Not a nested comprehension on purpose: a comprehension-inside-a-
+        # comprehension containing `await` fails to compile on Python 3.8
+        # ("asynchronous comprehension outside of an asynchronous function"),
+        # which is what the CI packaging step still targets.
+        augments = None
+        if hasAugmentData:
+            augments = []
+            for group in augmentGroup:
+                arr = []
+                for aug in group['augments']:
+                    augId = aug['id']
+                    arr.append({
+                        "id": augId,
+                        "icon": await connector.getAugmentIcon(augId),
+                        "name": connector.manager.getAugmentsName(augId),
+                        "win": aug['win'],
+                        'play': aug['play'],
+                        'pickRate': aug['pick_rate']
+                    })
+                augments.append(arr)
 
         # League Classic's old point-allocation mastery trees
         # (Offense/Defense/Utility), separate from classicRunes above.

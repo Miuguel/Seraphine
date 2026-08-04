@@ -21,7 +21,8 @@ jobs:
       - name: Pack Seraphine
         run: |
           pip install -r requirements.txt
-          pip install pyinstaller==5.13
+          pip install pyinstaller
+          python -m compileall -q app main.py
           .\make.ps1
           echo "SUCCESS=true" >> $GITHUB_ENV
       - name: Upload artifact

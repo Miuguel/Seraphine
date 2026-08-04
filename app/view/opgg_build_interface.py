@@ -37,6 +37,7 @@ class BuildInterface(QFrame):
         self.summonerSpells = SummonerSpellsWidget()
         self.championPerks = ChampionPerksWidget()
         self.classicRunes = ClassicRunesWidget()
+        self.legacyMasteries = LegacyMasteriesWidget()
         self.championSkills = ChampionSkillsWidget()
         self.championItems = ChampionItemWidget()
         self.championCounters = ChampionCountersWidget()
@@ -69,6 +70,7 @@ class BuildInterface(QFrame):
         self.scrollLayout.addWidget(self.summonerSpells)
         self.scrollLayout.addWidget(self.championPerks)
         self.scrollLayout.addWidget(self.classicRunes)
+        self.scrollLayout.addWidget(self.legacyMasteries)
         self.scrollLayout.addWidget(self.championSkills)
         self.scrollLayout.addWidget(self.championItems)
         self.scrollLayout.addWidget(self.championCounters)
@@ -92,6 +94,7 @@ class BuildInterface(QFrame):
         self.summonerSpells.updateWidget(data.get('summonerSpells'))
         self.championPerks.updateWidget(data.get('perks'), summary)
         self.classicRunes.updateWidget(data.get('classicRunes'))
+        self.legacyMasteries.updateWidget(data.get('legacyMasteries'))
         self.championSkills.updateWidget(data.get('championSkills'))
         self.championItems.updateWidget(data.get('items'))
         self.championCounters.updateWidget(data.get('counters'), summary)
@@ -504,6 +507,126 @@ class ClassicRunesWidget(BuildWidgetBase):
         else:
             self.winRateLabel.setText("")
             self.gamesLabel.setText("")
+
+        self.setVisible(True)
+
+
+class LegacyMasteryItemWidget(QFrame):
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.hBoxLayout = QHBoxLayout(self)
+
+        self.icon = RoundedLabel(radius=4)
+        self.icon.setFixedSize(24, 24)
+
+        self.textLayout = QVBoxLayout()
+        self.nameLabel = QLabel()
+        self.descriptionLabel = QLabel()
+
+        self.rankLabel = QLabel()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.nameLabel.setObjectName("bodyLabel")
+        self.descriptionLabel.setObjectName("grayBodyLabel")
+        self.descriptionLabel.setWordWrap(True)
+        self.rankLabel.setObjectName("boldBodyLabel")
+
+    def __initLayout(self):
+        self.textLayout.setContentsMargins(0, 0, 0, 0)
+        self.textLayout.setSpacing(0)
+        self.textLayout.addWidget(self.nameLabel)
+        self.textLayout.addWidget(self.descriptionLabel)
+
+        self.hBoxLayout.setContentsMargins(0, 4, 0, 4)
+        self.hBoxLayout.addWidget(self.icon)
+        self.hBoxLayout.addSpacing(8)
+        self.hBoxLayout.addLayout(self.textLayout)
+        self.hBoxLayout.addSpacerItem(QSpacerItem(
+            0, 0, QSizePolicy.Expanding, QSizePolicy.Fixed))
+        self.hBoxLayout.addWidget(self.rankLabel)
+
+    def updateWidget(self, data):
+        self.icon.setPicture(data['icon'])
+        self.nameLabel.setText(data['name'])
+        self.descriptionLabel.setText(data['description'])
+        self.rankLabel.setText(f"{data['rank']}/{data['maxRank']}")
+
+
+class LegacyMasteriesWidget(BuildWidgetBase):
+    """
+    League Classic's old point-allocation mastery trees
+    (Offense/Defense/Utility), separate from the old runes shown by
+    ClassicRunesWidget -- OP.GG exposes this as "legacy_masteries".
+    """
+
+    def __init__(self, parent: QWidget = None):
+        super().__init__(parent)
+
+        self.vBoxLayout = QVBoxLayout(self)
+
+        self.titleLabel = QLabel(self.tr("Legacy Masteries"))
+        self.treesLayout = QVBoxLayout()
+
+        self.__initWidget()
+        self.__initLayout()
+
+    def __initWidget(self):
+        self.titleLabel.setObjectName("subtitleLabel")
+
+    def __initLayout(self):
+        self.treesLayout.setContentsMargins(0, 0, 0, 0)
+        self.treesLayout.setSpacing(6)
+
+        self.vBoxLayout.setContentsMargins(13, 11, 13, 11)
+        self.vBoxLayout.addWidget(self.titleLabel)
+        self.vBoxLayout.addSpacing(6)
+        self.vBoxLayout.addLayout(self.treesLayout)
+
+    def __clearTrees(self):
+        for i in reversed(range(self.treesLayout.count())):
+            item = self.treesLayout.itemAt(i)
+            self.treesLayout.removeItem(item)
+
+            if widget := item.widget():
+                widget.deleteLater()
+            elif layout := item.layout():
+                while layout.count():
+                    sub = layout.takeAt(0)
+                    if subWidget := sub.widget():
+                        subWidget.deleteLater()
+
+    def updateWidget(self, data):
+        if not data:
+            self.setVisible(False)
+            return
+
+        trees = {}
+        for mastery in data:
+            trees.setdefault(mastery['tree'], []).append(mastery)
+
+        self.__clearTrees()
+
+        for tree, masteries in trees.items():
+            points = sum(m['rank'] for m in masteries)
+
+            treeLayout = QVBoxLayout()
+            treeLayout.setContentsMargins(0, 0, 0, 0)
+            treeLayout.setSpacing(0)
+
+            treeHeader = QLabel(f"{tree} ({points})")
+            treeHeader.setObjectName("boldBodyLabel")
+            treeLayout.addWidget(treeHeader)
+
+            for mastery in masteries:
+                item = LegacyMasteryItemWidget()
+                item.updateWidget(mastery)
+                treeLayout.addWidget(item)
+
+            self.treesLayout.addLayout(treeLayout)
 
         self.setVisible(True)
 

@@ -9,6 +9,7 @@ from app.common.config import cfg
 TAG = "opgg"
 
 CLASSIC_RUNE_ICON_FOLDER = "app/resource/game/classic rune icons"
+LEGACY_MASTERY_ICON_FOLDER = "app/resource/game/legacy mastery icons"
 
 
 class Opgg:
@@ -36,16 +37,11 @@ class Opgg:
         res = await self.session.get(url, params=params, ssl=False, proxy=self.proxy)
         return await res.json()
 
-    async def getClassicRuneIcon(self, url, sourceToken):
-        """
-        League Classic's old-style rune icons (Mark/Seal/Glyph/Quintessence)
-        are hosted on OP.GG's own CDN, not exposed by the LCU -- cache them
-        locally the same way champion/item/rune icons are cached elsewhere.
-        """
-        if not os.path.exists(CLASSIC_RUNE_ICON_FOLDER):
-            os.makedirs(CLASSIC_RUNE_ICON_FOLDER)
+    async def __downloadAndCacheAsset(self, url, folder, key):
+        if not os.path.exists(folder):
+            os.makedirs(folder)
 
-        path = f"{CLASSIC_RUNE_ICON_FOLDER}/{sourceToken}.png"
+        path = f"{folder}/{key}.png"
 
         if not os.path.exists(path):
             res = await self.assetSession.get(url, ssl=False, proxy=self.proxy)
@@ -55,6 +51,21 @@ class Opgg:
                 f.write(data)
 
         return path
+
+    async def getClassicRuneIcon(self, url, sourceToken):
+        """
+        League Classic's old-style rune icons (Mark/Seal/Glyph/Quintessence)
+        are hosted on OP.GG's own CDN, not exposed by the LCU -- cache them
+        locally the same way champion/item/rune icons are cached elsewhere.
+        """
+        return await self.__downloadAndCacheAsset(url, CLASSIC_RUNE_ICON_FOLDER, sourceToken)
+
+    async def getLegacyMasteryIcon(self, url, masteryId):
+        """
+        Same as getClassicRuneIcon, but for the old Offense/Defense/Utility
+        mastery tree icons -- also CDN-hosted by OP.GG, also not in the LCU.
+        """
+        return await self.__downloadAndCacheAsset(url, LEGACY_MASTERY_ICON_FOLDER, masteryId)
 
     @alru_cache(maxsize=512)
     async def __fetchTierList(self, region, mode, tier):
@@ -247,6 +258,9 @@ class OpggDataParser:
 
         summonerSpells = []
         for s in data['summoner_spells']:
+            if 'play' not in s:
+                continue
+
             icons = [await connector.getSummonerSpellIcon(id)
                      for id in s['ids']]
 
@@ -258,21 +272,30 @@ class OpggDataParser:
                 'pickRate': s['pick_rate']
             })
 
+        # League Classic mixes static "recommendation" entries (no play/win/
+        # pick_rate, just a source_type tag) in among the real stat-backed
+        # ones whenever a champion/position doesn't have enough games --
+        # filter those out everywhere rather than crash on a missing key.
+        def withStats(items):
+            return [i for i in (items or []) if 'play' in i]
+
         # Low-sample-size modes/positions (e.g. League Classic) may not have
         # enough games recorded to have any skill-order data at all.
-        if data['skill_masteries'] and data['skills']:
+        skillMasteries = withStats(data['skill_masteries'])
+        skillOrders = withStats(data['skills'])
+        if skillMasteries and skillOrders:
             skills = {
-                "masteries": data['skill_masteries'][0]['ids'],
-                "order": data['skills'][0]['order'],
-                'play': data['skills'][0]['play'],
-                'win': data['skills'][0]['win'],
-                'pickRate': data['skills'][0]['pick_rate']
+                "masteries": skillMasteries[0]['ids'],
+                "order": skillOrders[0]['order'],
+                'play': skillOrders[0]['play'],
+                'win': skillOrders[0]['win'],
+                'pickRate': skillOrders[0]['pick_rate']
             }
         else:
             skills = None
 
         boots = []
-        for i in data['boots'][:3]:
+        for i in withStats(data['boots'])[:3]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             boots.append({
                 "icons": icons,
@@ -282,7 +305,7 @@ class OpggDataParser:
             })
 
         startItems = []
-        for i in data['starter_items'][:3]:
+        for i in withStats(data['starter_items'])[:3]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             startItems.append({
                 "icons": icons,
@@ -292,7 +315,7 @@ class OpggDataParser:
             })
 
         coreItems = []
-        for i in data['core_items'][:5]:
+        for i in withStats(data['core_items'])[:5]:
             icons = [await connector.getItemIcon(id) for id in i['ids']]
             coreItems.append({
                 "icons": icons,
@@ -302,7 +325,7 @@ class OpggDataParser:
             })
 
         lastItems = []
-        for i in data['last_items'][:16]:
+        for i in withStats(data['last_items'])[:16]:
             lastItems.append(await connector.getItemIcon(i['ids'][0]))
 
         strongAgainst = []
@@ -342,17 +365,22 @@ class OpggDataParser:
         # the modern rune trees -- OP.GG exposes this separately as
         # "classic_runes" since it has no relation to the modern "runes"
         # field (which is always empty for these modes).
+        # Only the first page is ever shown (see ClassicRunesWidget), and
+        # alternate "recommendation" pages (source_type set instead of
+        # play/win/pick_rate) don't carry a source_token per rune -- so only
+        # parse that first page rather than crashing on the others.
+        classicRunePages = data.get('classic_runes') or []
         classicRunes = [{
             'runes': [{
-                'icon': await opgg.getClassicRuneIcon(rune['icon_url'], rune['source_token']),
+                'icon': await opgg.getClassicRuneIcon(rune['icon_url'], rune.get('source_token', rune['id'])),
                 'name': rune['name'],
                 'tooltip': rune['tooltip'],
                 'count': rune['count'],
-            } for rune in page['runes']],
-            'play': page['play'],
-            'win': page['win'],
-            'pickRate': page['pick_rate'],
-        } for page in data.get('classic_runes') or []]
+            } for rune in classicRunePages[0]['runes']],
+            'play': classicRunePages[0].get('play'),
+            'win': classicRunePages[0].get('win'),
+            'pickRate': classicRunePages[0].get('pick_rate'),
+        }] if classicRunePages else []
 
         # ARAM: Mayhem Classic-ish has no runes at all (see classicRunes
         # above), but -- like Mayhem and Arena -- does have an augment pick,
@@ -370,6 +398,21 @@ class OpggDataParser:
             'play': aug['play'],
             'pickRate': aug['pick_rate']
         } for aug in group['augments']] for group in augmentGroup]
+
+        # League Classic's old point-allocation mastery trees
+        # (Offense/Defense/Utility), separate from classicRunes above.
+        # OP.GG returns a couple of alternate "recommendation" pages with no
+        # play/win/pickRate to rank them by -- just show the first one.
+        legacyMasteryPages = data.get('legacy_masteries') or []
+        legacyMasteries = [{
+            'id': (mid := mastery['id']),
+            'icon': await opgg.getLegacyMasteryIcon(mastery['icon_url'], mid),
+            'name': mastery['name'],
+            'description': mastery['description'],
+            'tree': mastery['tree'],
+            'rank': mastery['rank'],
+            'maxRank': mastery['max_rank'],
+        } for mastery in (legacyMasteryPages[0]['masteries'] if legacyMasteryPages else [])]
 
         return {
             "summary": {
@@ -398,6 +441,7 @@ class OpggDataParser:
             },
             "perks": perks,
             "classicRunes": classicRunes,
+            "legacyMasteries": legacyMasteries,
             "augments": augments,
         }
 
